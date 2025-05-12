@@ -217,10 +217,6 @@ def objective_function(
         penalty_count = sum(replaceability_module)
         penalty_factor = 1 + 0.5 * penalty_count
 
-    # Helper function for impact details
-    def create_impact_details(name, value, aspects_len):
-        return (name, value, [0] * aspects_len)
-
     # Helper mapping for single-objective results
     target_function_mapping = {
         "climate change": ("Climate Change Impact", climate_change_impact, "climate change"),
@@ -243,8 +239,8 @@ def objective_function(
         label, impact, category = target_function_mapping[target_function]
         normalized_impact = impact / impact_thresholds[category] * penalty_factor
         print(f"Normalized {label}: {normalized_impact}; (penalized)")
-        aspects = [0] * len(impact_results_df.loc[category].tolist())
-        return ((normalized_impact,), (category, 1000000, aspects), {k: 0 for k in lca_system_model.keys()})
+        aspects = impact_results_df.loc[category].tolist()
+        return ((normalized_impact,), (category, impact, aspects), lca_system_model)
 
     elif target_function == "Total Environmental Impact (distance-to-target)":
         normalized_cc_impact = climate_change_impact / impact_thresholds["climate change"] * penalty_factor
@@ -278,21 +274,21 @@ def objective_function(
         print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penality = {penalty_factor})")
         
         impact_details = [
-            create_impact_details("Climate Change Impact", 1000000, len(impact_results_df.loc["climate change"].tolist())),
-            create_impact_details("Ozone Depletion Impact", 1000000, len(impact_results_df.loc["ozone depletion"].tolist())),
-            create_impact_details("Marine Eutrophication Impact", 1000000, len(impact_results_df.loc["eutrophication: marine"].tolist())),
-            create_impact_details("Freshwater Eutrophication Impact", 1000000, len(impact_results_df.loc["eutrophication: freshwater"].tolist())),
-            create_impact_details("Terrestrial Acidification Impact", 1000000, len(impact_results_df.loc["acidification: terrestrial"].tolist())),
-            create_impact_details("Land Use Impact", 1000000, len(impact_results_df.loc["land use"].tolist())),
-            create_impact_details("Water Use Impact", 1000000, len(impact_results_df.loc["water use"].tolist())),
-            create_impact_details("Photochemical Ozone Formation Impact", 1000000, len(impact_results_df.loc["photochemical oxidant formation: human health"].tolist())),
-            create_impact_details("Carcinogenic Human Toxicity Impact", 1000000, len(impact_results_df.loc["human toxicity: carcinogenic"].tolist())),
-            create_impact_details("Non-Carcinogenic Human Toxicity Impact", 1000000, len(impact_results_df.loc["human toxicity: non-carcinogenic"].tolist())),
-            create_impact_details("Freshwater Ecotoxicity Impact", 1000000, len(impact_results_df.loc["ecotoxicity: freshwater"].tolist())),
-            create_impact_details("Ionising Radiation Impact", 1000000, len(impact_results_df.loc["ionising radiation"].tolist())),
-            create_impact_details("Energy Resources Depletion Impact", 1000000, len(impact_results_df.loc["energy resources depletion: non-renewable"].tolist())),
-            create_impact_details("Material Resources Impact", 1000000, len(impact_results_df.loc["material resources: metals/minerals"].tolist())),
+            ("Climate Change Impact", climate_change_impact, impact_results_df.loc["climate change"].tolist()),
+            ("Ozone Depletion Impact", ozone_depletion_impact, impact_results_df.loc["ozone depletion"].tolist()),
+            ("Marine Eutrophication Impact", marine_eutrophication_impact, impact_results_df.loc["eutrophication: marine"].tolist()),
+            ("Freshwater Eutrophication Impact", freshwater_eutrophication_impact, impact_results_df.loc["eutrophication: freshwater"].tolist()),
+            ("Terrestrial Acidification Impact", terrestrial_acidification_impact, impact_results_df.loc["acidification: terrestrial"].tolist()),
+            ("Land Use Impact", land_use_impact, impact_results_df.loc["land use"].tolist()),
+            ("Water Use Impact", water_use_impact, impact_results_df.loc["water use"].tolist()),
+            ("Photochemical Ozone Formation Impact", photochemical_ozone_formation_impact, impact_results_df.loc["photochemical oxidant formation: human health"].tolist()),
+            ("Carcinogenic Human Toxicity Impact", carcinogenic_human_toxicity_impact, impact_results_df.loc["human toxicity: carcinogenic"].tolist()),
+            ("Non-Carcinogenic Human Toxicity Impact", non_carcinogenic_human_toxicity_impact, impact_results_df.loc["human toxicity: non-carcinogenic"].tolist()),
+            ("Freshwater Ecotoxicity Impact", freshwater_ecotoxicity_impact, impact_results_df.loc["ecotoxicity: freshwater"].tolist()),
+            ("Ionising Radiation Impact", ionising_radiation_impact, impact_results_df.loc["ionising radiation"].tolist()),
+            ("Energy Resources Depletion Impact", energy_resources_depletion_impact, impact_results_df.loc["energy resources depletion: non-renewable"].tolist()),
+            ("Material Resources Impact", material_resources_impact, impact_results_df.loc["material resources: metals/minerals"].tolist())
         ]
-        return ((normalized_cc_impact, normalized_od_impact, normalized_meu_impact, normalized_feu_impact, normalized_tac_impact, normalized_lu_impact, normalized_wu_impact, normalized_pof_impact, normalized_cht_impact, normalized_nht_impact, normalized_fet_impact, normalized_ir_impact, normalized_erd_impact, normalized_mr_impact), impact_details, {k: 0 for k in lca_system_model.keys()})
+        return ((normalized_cc_impact, normalized_od_impact, normalized_meu_impact, normalized_feu_impact, normalized_tac_impact, normalized_lu_impact, normalized_wu_impact, normalized_pof_impact, normalized_cht_impact, normalized_nht_impact, normalized_fet_impact, normalized_ir_impact, normalized_erd_impact, normalized_mr_impact), impact_details, lca_system_model)
     else:
         raise ValueError(f"Target Function {target_function} unknown")    
