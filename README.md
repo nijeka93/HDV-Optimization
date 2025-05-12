@@ -56,11 +56,11 @@ The core logic is implemented in [`main_optimization.py`](main_optimization.py).
   - Cell-to-module and module-to-pack structure
   - Replaceability options for components (binary: 0 = fixed, 1 = replaceable)
 
-### 🧠 2. Evolutionary Algorithm Setup (via DEAP)
+### 🧠 2. Evolutionary Algorithm Standard Setup (via DEAP)
 - Uses **NSGA-II** for multi-objective optimization
 - Parameters:
-  - Population size: 50
-  - Generations: 120
+  - Population size: 75
+  - Generations: 150
   - Crossover probability: 0.8
   - Mutation probability: 0.1
 - Elitism ensures best individuals are preserved each generation
@@ -129,4 +129,4 @@ This project builds upon the [carculator_truck](https://github.com/Laboratory-fo
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the BSD-3 License. See the [LICENSE](LICENSE) file for details.
