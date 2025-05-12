@@ -1,0 +1,32 @@
+package:
+  name: carculator_truck
+  version: {{ environ['VERSION'] }}
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install --no-deps --ignore-installed .
+  script_env:
+    - VERSION
+    - CONDA_BLD_PATH
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - carculator_utils
+    - prettytable
+
+test:
+  imports:
+    - carculator_truck
+
+about:
+  home: https://github.com/romainsacchi/carculator_truck
+  license: BSD License
+  summary: 'Life Cycle Assessment model for medium and heavy duty trucks.'
+license_family: BSD

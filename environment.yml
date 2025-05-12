@@ -1,0 +1,16 @@
+
+
+name: hdv_optimization
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - numpy>=1.24
+  - pandas
+  - matplotlib
+  - openpyxl
+  - pip:
+      - deap
+      - carculator-truck
