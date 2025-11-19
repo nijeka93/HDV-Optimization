@@ -17,9 +17,13 @@ venv/
 # Mac/Windows system files
 .DS_Store
 Thumbs.db
+**/.DS_Store
 
 # Data and result files
 *.csv
 *.xlsx
 *.xls
+optimization_progress.csv
+optimization_results.csv
+enumeration_progress.json
 Optimization results/

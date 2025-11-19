@@ -6,7 +6,7 @@ from data_manager import get_data_point, list_components, get_component, get_com
 module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb", "module_bms", "module_signal_connector"]
 pack_components = ["pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 
-def update_number_of_components(cells_per_module: float, modules_in_parallel: int):
+def update_number_of_components(cells_per_module: float, modules_in_parallel: int, cells_in_parallel: int):
     """
     Returns a list each for the quantities of module and pack components. Module_components_quantitites is derived per module, whereas pack_components_quantitites
     is derived per pack.
@@ -14,6 +14,7 @@ def update_number_of_components(cells_per_module: float, modules_in_parallel: in
     Parameters:
     param:: cells_per_module: float
     param:: modules_in_parallel: int
+    param:: cells_in_parallel: int
     
     Returns:
     list[int]: module_component_quantities [#]
@@ -22,15 +23,37 @@ def update_number_of_components(cells_per_module: float, modules_in_parallel: in
     
     module_components_quantities = []
     pack_components_quantities = []
+    i = 0
     
     for component in module_components:
-        print(f"component {component}:")
         if component == "cell" or component == "module_signal_connector":
             module_components_quantities.append(cells_per_module)
         elif component == "module_bms":
             module_components_quantities.append(1)
+        elif component == "module_voltage_sensor":
+            try:
+                per_string = int(get_data_point(component, "quantity"))
+            except Exception:
+                per_string = 1
+            qty = int(math.ceil(float(cells_in_parallel) / float(modules_in_parallel))) * per_string
+            module_components_quantities.append(qty)
+        elif component == "module_temperature_sensor":
+            try:
+                sensors_per_cell = float(get_data_point(component, "quantity"))
+            except Exception:
+                sensors_per_cell = 0.0
+            if sensors_per_cell and sensors_per_cell > 0:
+                qty = int(math.ceil(sensors_per_cell * float(cells_per_module) + 2))
+                print(f"computed module_temperature_sensor qty = ceil({sensors_per_cell} * {cells_per_module} + 2) = {qty}")
+            else:
+                qty = int(math.ceil(0.2 * float(cells_per_module) + 2)) # 0.2 temp sensors per cell is appropriate for the 2.8kg prismatic cell
+                print(f"no quantity_per_cell provided; using fixed quantity = {qty}")
+            module_components_quantities.append(qty)
         else:
             module_components_quantities.append(get_data_point(component, "quantity"))
+    print(f"module component list: {module_components}")
+    print(f"module component quantities: {module_components_quantities}")
+
             
     for component in pack_components:
         if component == "pack_voltage_sensor":
@@ -43,7 +66,7 @@ def update_number_of_components(cells_per_module: float, modules_in_parallel: in
     return module_components_quantities, pack_components_quantities
 
 
-def calculate_module(module_components: list[str], modules_in_parallel: int, module_design: int, cell_to_cell_clearance: list[float], cells_per_module: float, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool]):
+def calculate_module(module_components: list[str], modules_in_parallel: int, module_design: int, cell_to_cell_clearance: list[float], cells_per_module: float, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool]):
     """
     Returns the mass of the module casing in g. The mass is calculated via the volume of the module casing, derived via the internal volume required (+ some margin)
     Assumptions:
@@ -55,7 +78,8 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
     
     Parameters:
     module_components (list[str]): list of all the specific module components (e.g., '(cylindrical, small)', etc.)
-    modules_in_parallel (int): number of modules in parallel
+    modules_in_parallel (int): number of modules in parallel per pack
+    cells_in_parallel (int): number of cells in parallel per pack
     module_design (int): optimization variable; integers 0-4 represent certain module designs
     geometry (str): cell type
     cell_to_cell_clearance (list[float]): distance between cells [mm]
@@ -70,7 +94,7 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
     internal_volume = 0
     module_mass = 0
     cell_mass = 0
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
     print(f"module_components_quantities: {module_components_quantities}")
 
     for index, component in enumerate(module_components):
@@ -102,23 +126,23 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
     mounting_volume = internal_volume ** (2/3) * 2 # Assuming top- & bottom-mounting a 1 mm thickness
     print(f"module mounting volume: {mounting_volume} [ccm]")
     
-    isolation_volume = (internal_volume ** (1/3) + 0.3) ** 3 - internal_volume # Ass uming 3mm isolation
+    isolation_volume = (internal_volume ** (1/3) + 0.3) ** 3 - internal_volume # Assuming 3mm isolation
     print(f"module isolation volume: {isolation_volume} [ccm]")
     
-    isolation_volume_sealed = (internal_volume ** (1/3) + 0.4) ** 3 - internal_volume # Assuming 4mm isolation
+    isolation_volume_sealed = (internal_volume ** (1/3) + 0.35) ** 3 - internal_volume # Assuming 3.5mm isolation
     print(f"sealed module isolation volume: {isolation_volume} [ccm]")
     
     casing_volume = (internal_volume ** (1/3) + 0.3 + 0.2) ** 3 - (internal_volume ** (1/3) + 0.3) ** 3 # Assuming 2mm wall thickness
     print(f"module casing volume: {casing_volume} [ccm]")
 
-    casing_volume_sealed = (internal_volume ** (1/3) + 0.4 + 0.2) ** 3 - (internal_volume ** (1/3) + 0.4) ** 3 # Assuming 2mm wall thickness
+    casing_volume_sealed = (internal_volume ** (1/3) + 0.35 + 0.2) ** 3 - (internal_volume ** (1/3) + 0.4) ** 3 # Assuming 2mm wall thickness
     print(f"sealed module casing volume: {casing_volume} [ccm]")
     
-    if module_design == 0: # Closed Casing (not sealed; PP) with foam filling
+    if module_design == 0: # Closed Casing (not sealed; HDPE) with foam filling
         module_volume = internal_volume + mounting_volume + isolation_volume
         module_casing_mass = (mounting_volume + isolation_volume) * 0.94 # HDPE density: 0.94 g/cm3
         print(f"module design 0: volume = internal ({internal_volume}) mounting ({mounting_volume}) + isolation ({isolation_volume}) = {module_volume} [ccm]")
-    elif module_design == 1: # Open Casing (PP) with foam filling
+    elif module_design == 1: # Open Casing (HDPE) with foam filling
         module_volume = internal_volume + mounting_volume + isolation_volume
         module_casing_mass = (mounting_volume + isolation_volume) * 0.94 * 0.8 # HDPE density: 0.940 g/cm3; # Assuming open design uses 80% of material compared to closed design
         print(f"module design 1: volume = internal ({internal_volume}) mounting ({mounting_volume}) + isolation ({isolation_volume}) * 0,8 = {module_volume} [ccm]")
@@ -145,7 +169,7 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
 
     return float(module_casing_mass), int(module_volume), cell_mass, float(module_mass)
 
-def calculate_pack(pack_components: list[str], cells_per_module: float, module_volume: int, module_mass: int, modules_per_pack: int, modules_in_parallel:int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool], cooling_system_volume: float, cooling_system_mass: float):
+def calculate_pack(pack_components: list[str], cells_per_module: float, module_volume: int, module_mass: int, modules_per_pack: int, modules_in_parallel:int, cells_in_parallel:int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool], cooling_system_volume: float, cooling_system_mass: float):
     """
     Returns the mass of the module casing in g. The mass is calculated via the volume of the module casing, derived via the internal volume required (+ some margin)
     Assumptions:
@@ -157,7 +181,8 @@ def calculate_pack(pack_components: list[str], cells_per_module: float, module_v
     pack_components (list[str]): list of all the specific pack components (e.g., 'power connector', etc.)
     cells_per_module (float): number of cells per module
     module_mass (int): mass of the module incl. all module components [kg]
-    modules_per_pack (int): number of modules within the pack (e.g., 10)
+    modules_per_pack (int): number of modules per pack (e.g., 10)
+    cells_in_parallel (int): number of cells in parallel per pack
     modules_in_parallel (int): number of modules connected in parallel
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing a 3% mass penalty)
     packing_efficiency (float): volumentric packing efficiency (e.g., 0,97, meaning that 97% of volume is occupied)
@@ -173,7 +198,7 @@ def calculate_pack(pack_components: list[str], cells_per_module: float, module_v
     internal_volume = 0
     pack_mass = 0
     position = 0
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_per_pack, cells_per_module=cells_per_module)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_per_pack, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
     print(f"pack_components_quantities: {pack_components_quantities}")
 
     for index, component in enumerate(pack_components):
@@ -263,7 +288,7 @@ def create_design_space(target_voltage: int, target_energy: int, number_of_packs
     # Cells per column to achieve target capacity
     cells_in_parallel = round(target_energy / cell_energy / cells_in_series * 1000, 0)
     print(f"cells in parallel = {cells_in_parallel} = target energy {target_energy} [kWh] / cell energy {cell_energy} [Wh] / {cells_in_series} * 1000")
-    
+        
     # Cells needed in total (per pack)
     cells_per_pack = int(cells_in_series) * int(cells_in_parallel) / number_of_packs
     print(f"cells per pack: {cells_per_pack} = {cells_in_series} * {cells_in_parallel} / {number_of_packs}")
@@ -272,7 +297,7 @@ def create_design_space(target_voltage: int, target_energy: int, number_of_packs
 
 # Step 2: Define the objective functions (to maximize the value retention and battery efficiency)
 # First objective: Minimize failure rates (translated into battery swaps)
-def objective_value_retention(initial_battery_replacements: int, cells_per_module: int, modules_in_parallel: int, modules_per_pack: int, replaceable_mounting_add: float, replaceability_module: list[int], replaceability_pack: list[int], module_mass: int, pack_mass: int, powered_hours: int):
+def objective_value_retention(initial_battery_replacements: int, cells_per_module: int, cells_in_parallel: int, modules_in_parallel: int, modules_per_pack: int, replaceable_mounting_add: float, replaceability_module: list[int], replaceability_pack: list[int], module_mass: int, pack_mass: int, powered_hours: int):
     """
     Objective function to minimize the system's failure rate.
 
@@ -280,8 +305,9 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
     geometry (str): contains the cell type, e.g., 'cell (prismatic small)'
     chemistry (str): chemistry of the cell (e.g., 'NMC', etc.)
     cell_mass_share (float): the mass share of cells to the overall pack (e.g., 0.68)
-    cells_per_module (float): number of cell within the module (e.g., 100 #)
-    modules_per_pack (int): number of modules within the pack (e.g., 10 #)
+    cells_per_module (float): number of cell per module (e.g., 100 #)
+    cells_in_parallel (int): number of cells in parallel per pack
+    modules_per_pack (int): number of modules per pack (e.g., 10 #)
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing 1 3% mass penalty )
     replaceability_module (list[int]): list of module_components containing bools representing the component's replaceability ('0' = permanent; '1' = replaceable)
     replaceability_pack (list[int]): list of pack_components containing bools representing the component's replaceability ('0' = permanent; '1' = replaceable)
@@ -298,7 +324,7 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
     pack_component_mtbfs = []
     replacement_masses_per_pack = []
     replacements_per_pack = []
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
     # module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb" "module_bms", "module_signal_connector"]
     # pack_component = [, "pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 
@@ -401,7 +427,7 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
 
 
 # Second objective: Maximize Battery Efficiency (translated into gravimetric energy density)
-def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: int, replaceability_module: dict, replaceability_pack: dict, cells_per_module: float, cells_per_pack: int, modules_per_pack: int, modules_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float):
+def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: int, replaceability_module: dict, replaceability_pack: dict, cells_per_module: float, cells_per_pack: int, modules_per_pack: int, modules_in_parallel: int, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float):
     """
     Objective function to compute the battery cell energy density and cell mass share, 
     considering efficiency drawbacks due to the fixation methods.
@@ -411,6 +437,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
     geometry (str): Type of the battery (e.g., 'cell (cylindrical, small)', 'cell (prismatic, mid)', etc.)
     component_removability (dict): Dctionary of all battery components, stating which are permanent and which are removable
     cells_per_module (float): Number of cells per module (can be real number, if the total number of cells is not dividable by the selected number of modules).
+    cells_in_parallel (int): number of cells in paralle per pack
     cells_per_pack (int): Total number of cells.
     modules_per_pack (int): Total number of modules per pack.
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing 1 3% mass penalty )
@@ -429,6 +456,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
         module_design=module_design,
         cell_to_cell_clearance=cell_to_cell_clearance,
         cells_per_module=cells_per_module,
+        cells_in_parallel=cells_in_parallel,
         replaceable_mounting_add=replaceable_mounting_add,
         packing_efficiency=packing_efficiency,
         replaceability=replaceability_module
@@ -445,6 +473,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
         module_mass=module_mass,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=modules_in_parallel,
+        cells_in_parallel=cells_in_parallel,
         replaceable_mounting_add=replaceable_mounting_add,
         packing_efficiency=packing_efficiency,
         replaceability=replaceability_pack,

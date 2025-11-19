@@ -7,12 +7,48 @@ from prep_optimization_excel import objective_value_retention, objective_efficie
 from data_manager import get_component, get_data_point
 from classes import VehicleScope, Battery_Scope, Pack, Cell, StandardComponent
 
+import inspect  # add near other imports
+
+# Debug directory and initializer
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEBUG_DIR = MODULE_DIR  # write debug CSVs next to this file for predictability
+DEBUG_EFF_ARGS_CSV = os.path.join(DEBUG_DIR, "debug_efficiency_call_args.csv")
+DEBUG_RET_ARGS_CSV = os.path.join(DEBUG_DIR, "debug_retention_call_args.csv")
+_debug_initialized = False
+
+def _debug_init_once():
+    global _debug_initialized
+    if _debug_initialized:
+        return
+    _debug_initialized = True
+    try:
+        print(f"[debug] __file__: {os.path.abspath(__file__)}")
+        print(f"[debug] CWD: {os.getcwd()}")
+        print(f"[debug] Will write efficiency args to: {DEBUG_EFF_ARGS_CSV}")
+        print(f"[debug] Will write retention  args to: {DEBUG_RET_ARGS_CSV}")
+        os.makedirs(os.path.dirname(DEBUG_EFF_ARGS_CSV), exist_ok=True)
+        os.makedirs(os.path.dirname(DEBUG_RET_ARGS_CSV), exist_ok=True)
+    except Exception as e:
+        print(f"[debug] Failed to prepare debug paths: {e}")
+
+def _append_debug_row(csv_path: str, row: dict):
+    try:
+        df = pd.DataFrame([row])
+        # Emit a visible hint on first write
+        if not os.path.exists(csv_path):
+            print(f"[debug] Creating debug CSV: {os.path.abspath(csv_path)}")
+        df.to_csv(csv_path, mode="a", index=False, header=not os.path.exists(csv_path))
+    except Exception as e:
+        print(f"[debug][ERROR] Failed writing {csv_path}: {e}")
+        print(f"[debug] Offending row: {row}")
+        raise
 
 # Combine the elements of the optimization logic: 1) calculate drawbacks 2) pass drawback results to Carculator 3) run LCA 4) return LCA results
 def objective_function(
     scope: str,
     target_function: str,
     impact_thresholds: dict,
+    weighting_factors: dict,
     vehicle_scope: VehicleScope,
     carculator_scope: dict,
     module_design: int,
@@ -21,21 +57,57 @@ def objective_function(
     number_of_packs: int,
     cells_per_pack: int,
     cells_per_module: float,
+    cells_in_parallel: int,
     modules_in_parallel: int,
     modules_per_pack: int,
     replaceable_mounting_add: float,
     packing_efficiency: float,
     energy_storage: dict):
 
-    print(f"modules per pack received by objective_function: {modules_per_pack}")
+    _debug_init_once()
+    print(f"[debug] objective_function() entered in: {os.path.abspath(__file__)}")
+    print("[debug] ... will log prep_optimization_excel inputs")
+
+    print("___________________________________________________")
+    print(f"carculator battery dict: {energy_storage}")        
+    print("___________________________________________________")    
+
+    # Determine source (optimization vs enumeration) from caller
+    try:
+        _caller = inspect.stack()[1].filename
+    except Exception:
+        _caller = "<unknown>"
+    _source = "opt" if "main_optimization.py" in str(_caller) else (
+        "enum" if "main_full_enumeration.py" in str(_caller) else os.path.basename(str(_caller))
+    )
+
+    # --- Debug: log EXACT args going into objective_efficiency_increase ---
+    _eff_args = {
+        "source": _source,
+        "module_design": int(module_design),
+        "cell_to_cell_clearance": float(get_data_point("battery_scope", "cell_to_cell_clearance")),
+        "sum_rm": int(sum(replaceability_module)),
+        "sum_rp": int(sum(replaceability_pack)),
+        "cells_per_module": float(cells_per_module),
+        "cells_in_parallel": int(cells_in_parallel),
+        "cells_per_pack": int(cells_per_pack),
+        "modules_per_pack": int(modules_per_pack),
+        "modules_in_parallel": int(modules_in_parallel),
+        "replaceable_mounting_add": float(replaceable_mounting_add),
+        "packing_efficiency": float(packing_efficiency),
+        "number_of_packs": int(number_of_packs),
+    }
+    _append_debug_row(DEBUG_EFF_ARGS_CSV, _eff_args)
+    print(f"[debug] WROTE: {DEBUG_EFF_ARGS_CSV} (efficiency inputs)")
 
     # Call the efficiency objective function
     battery_efficiencies = objective_efficiency_increase(
         module_design=module_design,
-        cell_to_cell_clearance=get_data_point("battery_scope", "cell_to_cell_clearance")[module_design],
+        cell_to_cell_clearance=get_data_point("battery_scope", "cell_to_cell_clearance"),
         replaceability_module=replaceability_module,
         replaceability_pack=replaceability_pack,
         cells_per_module=cells_per_module,
+        cells_in_parallel=cells_in_parallel,
         cells_per_pack=cells_per_pack,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=modules_in_parallel,
@@ -52,13 +124,32 @@ def objective_function(
     print(f"optimization l45f: replaceable_mounting_add: {replaceable_mounting_add}")
     print(f"optimization l45f: packing_efficiency: {packing_efficiency}")
 
-    replaceable_mounting_add
+    # remove stray line that could cause NameError
+
+    # --- Debug: log EXACT args going into objective_value_retention ---
+    _ret_args = {
+        "source": _source,
+        "initial_battery_replacements": float(get_data_point("battery_scope", "initial_battery_replacements")),
+        "modules_in_parallel": int(modules_in_parallel),
+        "cells_per_module": float(cells_per_module),
+        "cells_in_parallel": int(cells_in_parallel),
+        "modules_per_pack": int(modules_per_pack),
+        "sum_rm": int(sum(replaceability_module)),
+        "sum_rp": int(sum(replaceability_pack)),
+        "module_mass": float(battery_efficiencies.get("module mass", float("nan"))),
+        "pack_mass": float(battery_efficiencies.get("pack mass", float("nan"))),
+        "powered_hours": float(get_data_point("vehicle_scope", "powered_hours")),
+        "replaceable_mounting_add": float(replaceable_mounting_add),
+    }
+    _append_debug_row(DEBUG_RET_ARGS_CSV, _ret_args)
+    print(f"[debug] WROTE: {DEBUG_RET_ARGS_CSV} (retention inputs)")
 
     # Call the value retention objective function
     battery_replacements = objective_value_retention(
         initial_battery_replacements=get_data_point("battery_scope", "initial_battery_replacements"),
         modules_in_parallel=modules_in_parallel,
         cells_per_module=cells_per_module,
+        cells_in_parallel=cells_in_parallel,
         modules_per_pack=modules_per_pack,
         replaceability_module=replaceability_module,
         replaceability_pack=replaceability_pack,
@@ -84,6 +175,7 @@ def objective_function(
     array.loc[dict(parameter="battery cell mass")] = battery_cells_mass
     array.loc[dict(parameter="energy battery mass")] = battery_total_mass       
     array.loc[dict(parameter="battery BoP mass")] = battery_bop_mass   
+    array.loc[dict(parameter="battery cycle life, " + get_data_point("cell", "chemistry"))] = [get_data_point("cell", "cycle_life")]
     payload_carculator = {
         (vehicle_scope.powertrain, vehicle_scope.size, int(vehicle_scope.year)): int(vehicle_scope.payload)
     }
@@ -106,13 +198,14 @@ def objective_function(
     
     print("----------------------------------------------------")    
     print("DEBUG: TruckModel going into calculation:")
-    print(tm.array.sel(size='40t', value=0, parameter=['lifetime kilometers', 'battery cell mass share', 'battery cell energy density', 'battery cell mass', 'battery BoP mass']).to_dataframe('val'))
+    print(tm.array.sel(size='40t', value=0, parameter=['lifetime kilometers', 'battery cell mass share', 'battery cell energy density', 'battery cell mass', 'battery BoP mass', 'battery cycle life']).to_dataframe('val'))
  
     # 5) Adapted values of calculated TruckModel parameters
     tm.array.loc[dict(parameter="battery lifetime replacements", value = 0)] = [battery_replacements] # working!!!; positive impact correlation
     tm.array.loc[dict(parameter="battery cell mass", value = 0)] = [battery_cells_mass] # working!!!; positive impact correlation
     tm.array.loc[dict(parameter="energy battery mass", value = 0)] = [battery_total_mass] # working!!!; positive impact correlation
     tm.array.loc[dict(parameter="battery BoP mass", value = 0)] = [battery_bop_mass] # working!!!; positive impact correlation
+    #tm.array.loc[dict(parameter="battery cycle life, " + get_data_point("cell", "chemistry"), value = 0)] = [get_data_point("cell", "cycle_life")]
     
     # 6) Extract additional Carculator parameters
     lca_system_model = {}
@@ -126,6 +219,7 @@ def objective_function(
     lca_system_model["TtW_energy"] = float(tm.array.sel(parameter="TtW energy", value=0).data)
     lca_system_model["TtW_efficiency"] = float(tm.array.sel(parameter="TtW efficiency", value=0).data)
     lca_system_model["electricity_consumption"] = float(tm.array.sel(parameter="electricity consumption", value=0).data)
+    lca_system_model["battery_cycle_life"] = float(tm.array.sel(parameter="battery cycle life", value=0).data)
 
     print(f"LCA parameter: 'curb_mass' = ({lca_system_model['curb_mass']})")
     print(f"LCA parameter: 'total_battery_mass' = ({lca_system_model['total_battery_mass']})")
@@ -137,6 +231,7 @@ def objective_function(
     print(f"LCA parameter: 'TtW_energy' = ({lca_system_model['TtW_energy']})")
     print(f"LCA parameter: 'TtW_efficiency' = ({lca_system_model['TtW_efficiency']})")
     print(f"LCA parameter: 'electricity_consumption' = ({lca_system_model['electricity_consumption']})")
+    print(f"LCA parameter: 'battery cycle life' = ({lca_system_model['battery_cycle_life']})")
 
     # 7) Define impact categories and processes
     impact_categories = ["climate change", "ozone depletion", "eutrophication: marine", "eutrophication: freshwater", 
@@ -258,20 +353,20 @@ def objective_function(
         normalized_erd_impact = energy_resources_depletion_impact / impact_thresholds["energy resources depletion: non-renewable"] * penalty_factor
         normalized_mr_impact = material_resources_impact / impact_thresholds["material resources: metals/minerals"] * penalty_factor
 
-        print(f"Normalized Climate Change Impact: {normalized_cc_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Ozone Depletion Impact: {normalized_od_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Marine Eutrophication Impact: {normalized_meu_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Freshwater Eutrophication Impact: {normalized_feu_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Terrestrial Acidification Impact: {normalized_tac_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Land Use Impact: {normalized_lu_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Water Use Impact: {normalized_wu_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Photochemical Ozone Impact: {normalized_pof_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Carcinogenic Human Toxicity Impact: {normalized_cht_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Non-Carcinogenic Human Toxicity Impact: {normalized_nht_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Freshwater Ecotoxicity Impact: {normalized_fet_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Ionising Radiation Impact: {normalized_ir_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Energy Resource Depletion Impact: {normalized_erd_impact}; (penality = {penalty_factor})")
-        print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penality = {penalty_factor})")
+        print(f"Normalized Climate Change Impact: {normalized_cc_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Ozone Depletion Impact: {normalized_od_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Marine Eutrophication Impact: {normalized_meu_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Freshwater Eutrophication Impact: {normalized_feu_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Terrestrial Acidification Impact: {normalized_tac_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Land Use Impact: {normalized_lu_impact}; (penaliy = {penalty_factor})")
+        print(f"Normalized Water Use Impact: {normalized_wu_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Photochemical Ozone Impact: {normalized_pof_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Carcinogenic Human Toxicity Impact: {normalized_cht_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Non-Carcinogenic Human Toxicity Impact: {normalized_nht_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Freshwater Ecotoxicity Impact: {normalized_fet_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Ionising Radiation Impact: {normalized_ir_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Energy Resource Depletion Impact: {normalized_erd_impact}; (penalty = {penalty_factor})")
+        print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penalty = {penalty_factor})")
         
         impact_details = [
             ("Climate Change Impact", climate_change_impact, impact_results_df.loc["climate change"].tolist()),

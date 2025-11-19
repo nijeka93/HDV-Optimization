@@ -29,7 +29,7 @@ class VehicleScope:
         self.powered_hours = powered_hours
 
 class Battery_Scope:
-    def __init__(self, target_voltage, target_energy, target_power, number_of_packs, max_volume_per_pack, replaceable_mounting_add, packing_efficiency, cell_to_cell_clearance, initial_battery_replacements):
+    def __init__(self, target_voltage, target_energy, target_power, number_of_packs, max_volume_per_pack, replaceable_mounting_add, packing_efficiency, cell_to_cell_clearance, module_design, initial_battery_replacements):
         """
         Initialize a battery scope object.
 
@@ -41,6 +41,7 @@ class Battery_Scope:
         :param replaceable_mounting_add: [%]; float
         :param packing_efficiency: [mm]; float
         :param cell_to_cell_clearance: [mm]; float
+        :param module_design: [#]; int
         :param initial_battery_replacements: [#/vehicle lifetime]; dummy value which is replaced by calculation later on
         """
         self.target_voltage = target_voltage
@@ -51,6 +52,7 @@ class Battery_Scope:
         self.replaceable_mounting_add = replaceable_mounting_add
         self.packing_efficiency = packing_efficiency
         self.cell_to_cell_clearance = cell_to_cell_clearance
+        self.module_design = module_design
         self.initial_battery_replacements = initial_battery_replacements
     
 
