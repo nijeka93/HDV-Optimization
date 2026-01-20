@@ -87,7 +87,7 @@ pack_components = ["module", "pack_voltage_sensor", "pack_current_sensor", "pack
 best_individual = None
 
 
-file_path = "Battery_Design_Parameters.xlsx"
+file_path = "data/Battery_Design_Parameters.xlsx"
 (
     vehicle_scope,
     battery_scope,
@@ -376,8 +376,8 @@ toolbox.register("select", tools.selNSGA2)
 
 # ----- 4. GA Parameters ------------------------------------------------------
 CXPB, MUTPB = 0.8, 0.1
-NGEN = 150 # 150
-POP_SIZE = 50 # 50
+NGEN = 10 # 150
+POP_SIZE = 10 # 50
 ELITE_SIZE = max(1, round(POP_SIZE / 50))  # At least 1 elite
 
 def generate_balanced_population(pop_size):
