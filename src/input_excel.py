@@ -4,7 +4,7 @@ from carculator_truck import *
 from classes import VehicleScope, Battery_Scope, Pack, Cell, StandardComponent
 from data_manager import add_component, get_component, update_component_variable
 
-def calc_lifetime_hours(driving_cycle: str, size: str, lifetime_kilometers: int) -> float: # bei allen functionen einfügen
+def calc_lifetime_hours(driving_cycle: str, size: str, lifetime_kilometers: int) -> float:
     driving_cycle = get_driving_cycle(size=size, name=driving_cycle)
     counter = 0
     avg_speed = 0
@@ -338,15 +338,22 @@ def load_parameters_from_excel(file_path):
     
     print("Initial TruckModel is defined")
     
-    initial_battery_replacements = tm.array.sel(
-        powertrain=parsed_parameters.get("Powertrain", ""),
-        year=int(parsed_parameters.get("Production Year", 0)),
-        parameter='battery lifetime replacements',
-        value=0)
-    print(f"initial battery replacements: {initial_battery_replacements.values[0]} [#]")
+    # initial_battery_replacements = tm.array.sel(
+    #     powertrain=parsed_parameters.get("Powertrain", ""),
+    #     year=int(parsed_parameters.get("Production Year", 0)),
+    #     parameter='battery lifetime replacements',
+    #     value=0)
+    # print(f"initial battery replacements: {initial_battery_replacements.values[0]} [#]")
     
     # Set and return the truck model
     tm.set_all()
+    fuel_economy = (tm.array.sel(size=parsed_parameters.get("Vehicle Size", ""), powertrain=parsed_parameters.get("Powertrain", ""), value=0, parameter=['electricity consumption']))
+    print(f"initial fuel economy: {fuel_economy.values[0]} [kWh/km]")
+    calculated_battery_replacements = lifetime_kilometers * fuel_economy.values[0] / (int(parsed_parameters.get("System Target Energy", 0)) * int(parsed_parameters.get("Cell Nominal Cycle Life", 0)))
+    
+    battery_scope.initial_battery_replacements = calculated_battery_replacements
+    tm.array.loc[dict(parameter="battery lifetime replacements", value = 0)] = [calculated_battery_replacements]
+    
     
     import carculator_truck as cct
     print("carculator_truck version:", getattr(cct, "__version__", "unknown"))

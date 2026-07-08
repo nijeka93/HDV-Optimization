@@ -6,7 +6,7 @@ from data_manager import get_data_point, list_components, get_component, get_com
 module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb", "module_bms", "module_signal_connector"]
 pack_components = ["pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 
-def update_number_of_components(cells_per_module: float, modules_in_parallel: int, cells_in_parallel: int):
+def update_number_of_components(cells_per_module: float, modules_in_parallel: int, modules_in_series: int, cells_in_parallel: int):
     """
     Returns a list each for the quantities of module and pack components. Module_components_quantitites is derived per module, whereas pack_components_quantitites
     is derived per pack.
@@ -14,6 +14,7 @@ def update_number_of_components(cells_per_module: float, modules_in_parallel: in
     Parameters:
     param:: cells_per_module: float
     param:: modules_in_parallel: int
+    param:: modules_in_series: int
     param:: cells_in_parallel: int
     
     Returns:
@@ -66,7 +67,7 @@ def update_number_of_components(cells_per_module: float, modules_in_parallel: in
     return module_components_quantities, pack_components_quantities
 
 
-def calculate_module(module_components: list[str], modules_in_parallel: int, module_design: int, cell_to_cell_clearance: list[float], cells_per_module: float, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool]):
+def calculate_module(module_components: list[str], modules_in_parallel: int, modules_in_series: int, module_design: int, cell_to_cell_clearance: list[float], cells_per_module: float, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool]):
     """
     Returns the mass of the module casing in g. The mass is calculated via the volume of the module casing, derived via the internal volume required (+ some margin)
     Assumptions:
@@ -79,6 +80,7 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
     Parameters:
     module_components (list[str]): list of all the specific module components (e.g., '(cylindrical, small)', etc.)
     modules_in_parallel (int): number of modules in parallel per pack
+    modules_in_series (int): number of modules in series per pack
     cells_in_parallel (int): number of cells in parallel per pack
     module_design (int): optimization variable; integers 0-4 represent certain module designs
     geometry (str): cell type
@@ -94,7 +96,7 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
     internal_volume = 0
     module_mass = 0
     cell_mass = 0
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, modules_in_series=modules_in_series, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
     print(f"module_components_quantities: {module_components_quantities}")
 
     for index, component in enumerate(module_components):
@@ -169,7 +171,7 @@ def calculate_module(module_components: list[str], modules_in_parallel: int, mod
 
     return float(module_casing_mass), int(module_volume), cell_mass, float(module_mass)
 
-def calculate_pack(pack_components: list[str], cells_per_module: float, module_volume: int, module_mass: int, modules_per_pack: int, modules_in_parallel:int, cells_in_parallel:int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool], cooling_system_volume: float, cooling_system_mass: float):
+def calculate_pack(pack_components: list[str], cells_per_module: float, module_volume: int, module_mass: int, modules_per_pack: int, modules_in_parallel:int, modules_in_series:int, cells_in_parallel:int, replaceable_mounting_add: float, packing_efficiency: float, replaceability: list[bool], cooling_system_volume: float, cooling_system_mass: float):
     """
     Returns the mass of the module casing in g. The mass is calculated via the volume of the module casing, derived via the internal volume required (+ some margin)
     Assumptions:
@@ -184,6 +186,7 @@ def calculate_pack(pack_components: list[str], cells_per_module: float, module_v
     modules_per_pack (int): number of modules per pack (e.g., 10)
     cells_in_parallel (int): number of cells in parallel per pack
     modules_in_parallel (int): number of modules connected in parallel
+    modules_in_series (int): number of modules in series per pack
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing a 3% mass penalty)
     packing_efficiency (float): volumentric packing efficiency (e.g., 0,97, meaning that 97% of volume is occupied)
     replaceability (list[bool]): identical list of pack_components, but containing bools representing the component's replaceability ('0' = permanent; '1' = replaceable)
@@ -198,7 +201,8 @@ def calculate_pack(pack_components: list[str], cells_per_module: float, module_v
     internal_volume = 0
     pack_mass = 0
     position = 0
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_per_pack, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, modules_in_series=modules_in_series, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
+    print(f"pack component list: {pack_components}")
     print(f"pack_components_quantities: {pack_components_quantities}")
 
     for index, component in enumerate(pack_components):
@@ -297,7 +301,7 @@ def create_design_space(target_voltage: int, target_energy: int, number_of_packs
 
 # Step 2: Define the objective functions (to maximize the value retention and battery efficiency)
 # First objective: Minimize failure rates (translated into battery swaps)
-def objective_value_retention(initial_battery_replacements: int, cells_per_module: int, cells_in_parallel: int, modules_in_parallel: int, modules_per_pack: int, replaceable_mounting_add: float, replaceability_module: list[int], replaceability_pack: list[int], module_mass: int, pack_mass: int, powered_hours: int):
+def objective_value_retention(initial_battery_replacements: int, cells_per_module: int, cells_in_parallel: int, modules_in_parallel: int, modules_in_series: int, modules_per_pack: int, replaceable_mounting_add: float, replaceability_module: list[int], replaceability_pack: list[int], module_mass: int, pack_mass: int, powered_hours: int, failure_propag_prob: float):
     """
     Objective function to minimize the system's failure rate.
 
@@ -307,13 +311,14 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
     cell_mass_share (float): the mass share of cells to the overall pack (e.g., 0.68)
     cells_per_module (float): number of cell per module (e.g., 100 #)
     cells_in_parallel (int): number of cells in parallel per pack
+    modules_in_parallel (int): number of modules in parallel per pack
+    modules_in_series (int): number of modules in series per pack
     modules_per_pack (int): number of modules per pack (e.g., 10 #)
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing 1 3% mass penalty )
     replaceability_module (list[int]): list of module_components containing bools representing the component's replaceability ('0' = permanent; '1' = replaceable)
     replaceability_pack (list[int]): list of pack_components containing bools representing the component's replaceability ('0' = permanent; '1' = replaceable)
     powered_hours (int): the number of hours the vehicle is powered during its whole lifetime
-    lifetime_kilometers (int): the number of kilometers the vehicle is driven during its whole lifetime
-    target_capacity (int): the capacity each traction battery pack is supposed to have (e.g., 125 kWh)
+    failure_propag_prob (float): the probability of failure propagation within each battery system level (i.e., module or pack)
 
     Returns:
     battery_replacements (float): the amount battery equivalents replaced during the hdv use phase
@@ -322,65 +327,88 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
     # --- Module components ---
     module_component_mtbfs = []
     pack_component_mtbfs = []
+    replacement_masses_per_module = []
     replacement_masses_per_pack = []
     replacements_per_pack = []
-    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
+    module_components_quantities, pack_components_quantities = update_number_of_components(modules_in_parallel=modules_in_parallel, modules_in_series=modules_in_series, cells_per_module=cells_per_module, cells_in_parallel=cells_in_parallel)
     # module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb" "module_bms", "module_signal_connector"]
     # pack_component = [, "pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 
     # 1) Calculate Mean Time Between Failures (MTBF; in hours) for each module component
     for index, component in enumerate(module_components):
                 
-        # Calculate MTBF and replacements for each module component
+        # Calculate MTBF and replacements for each module component per module
         component_fpmh = get_data_point(component, "failure_rate") * module_components_quantities[index]
         component_mtbf, component_reliability = calc_mtbf_and_reliability(fpmh=component_fpmh, powered_hours=powered_hours)
         print(f"{component} mtbf: {component_mtbf}")
         module_component_mtbfs.append(component_mtbf)
+
         # module_component_reliabilities.append(component_reliability)
-        
-    print(f"module mtbfs: {module_component_mtbfs}")
-    
+  
+    # print("DEBUG:__________________________________________________________________________")
+    # print(f"module component quantities per module: {module_components_quantities}")
+    # print(f"10 cells per module mtbf: {get_data_point("cell", "failure_rate") * 10}")
+    # print(f"20 cells per module mtbf: {get_data_point("cell", "failure_rate") * 20}")
+    # print(f"powered hours: {powered_hours} h")
+    # print(f"avg. speed: {1000000 / powered_hours} km/h")
+    # print("___________________________________________________________________________________")
+
     # 2) Identify the module component type causing to replace the whole module most often -> will determine module replacement timing
+    # a) Set correct cell mtbf by deriving if component aging or defect is dominant
     module_replacer_mtbf = sys.maxsize # just a placeholder
+    pack_replacer_mtbf = sys.maxsize # just a placeholder
+    aging_interval = powered_hours / (initial_battery_replacements[0] + 0.0001) # + 0.0001 to avoid division by zero
+    print(f"aging interval: {aging_interval} = powered hours ({powered_hours}) / initial battery replacements ({initial_battery_replacements[0]})")
+    if module_component_mtbfs[0] >= aging_interval:
+        module_component_mtbfs[0] = aging_interval # / cells_per_module
+        print(f"Cell MTBF based on aging: (cell mtbf {module_component_mtbfs[0]}=) {aging_interval}")
+    else:
+        print(f"Initial MTBF based on cell mtbf: {module_component_mtbfs[0]}")        
+    # b) Select worst (lowest) MTBF non-replaceable module component to become the module replacer
     for i, mtbf in enumerate(module_component_mtbfs):
-    # Set correct cell mtbf by deriving if component aging or defect is dominant
-        if mtbf >= (powered_hours / (initial_battery_replacements + 0.001)): # + 0.001 to avoid division by zero
-            component_mtbf = initial_battery_replacements
-            print(f"Initial MTBF based on battery aging: {powered_hours / (initial_battery_replacements + 0.001)}")
         if not replaceability_module[i] and mtbf < module_replacer_mtbf:
             module_replacer_mtbf = mtbf
-            print(f"Lowest MTBF of non-replaceable component: {module_components[i]} with {module_replacer_mtbf}")
+            print(f"Lowest MTBF of non-replaceable component (re-)set to: {module_components[i]} with {module_replacer_mtbf}")
                 
-    # 3) Calculate replacement weights for each module component
+    # 3) Calculate replacement mass for each module component per pack
     for index, component in enumerate(module_components):    
-        # Calculate replaced mass per pack and vehicle lifetime (module level components)
-        # a) Set correct component weight
-        if replaceability_module[index] == 1:
+        # a) Set correct component mass
+        if replaceability_module[index] == 1: # if component is replaceable, add mass penalty
             mass = get_data_point(component, "mass") * replaceable_mounting_add
+            print(f"module component {component} is replaceable -> adding mass penalty of {replaceable_mounting_add} to mass {get_data_point(component, 'mass')} = {mass}")        
         else:
             mass = get_data_point(component, "mass")
-            
-        # c) Add replacement weights per pack accordingly:
-        # Case 1: component replaceable and more prone to defects than worst permanently-fixed component -> weight of component is replaced
+            print(f"module component {component} is NOT replaceable -> mass {mass} = {get_data_point(component, 'mass')}")
+        # b) Add replacement mass per pack accordingly:
+        # Case 1: component replaceable and more prone to defects than worst permanently-fixed component per module -> weight of component * number_per_pack replaced
         if replaceability_module[index] == 1 and module_component_mtbfs[index] <= module_replacer_mtbf:
-            replacement_masses_per_pack.append(mass * modules_per_pack)
-            print(f"module component {component} is replaceable -> adding {mass * modules_per_pack} to replacement mass per pack and vehicle lifetime")
+            if component == "cell" and replaceability_pack[0] == 1: # adding failure propagation probability to the cells to account for the fact that a cell failure can propagate and cause a module replacement
+                replacement_masses_per_pack.append((1-failure_propag_prob) * mass * cells_per_module * modules_per_pack + failure_propag_prob * module_mass * modules_per_pack)
+                print(f"cell is replaceable and potentially ({failure_propag_prob*100} %) propagating its failure -> adding {(1-failure_propag_prob) * mass * cells_per_module + failure_propag_prob * module_mass * modules_per_pack} kg to replacement mass per pack and vehicle lifetime")
+            elif component == "cell" and replaceability_pack[0] == 0: # adding failure propagation probability to the cells to account for the fact that a cell failure can propagate and cause a pack replacement
+                replacement_masses_per_pack.append((1-failure_propag_prob) * mass * cells_per_module * modules_per_pack + failure_propag_prob * pack_mass)
+                print(f"cell is replaceable and potentially ({failure_propag_prob*100} %) propagating its failure -> adding {(1-failure_propag_prob) * mass * cells_per_module * modules_per_pack + failure_propag_prob * pack_mass} kg to replacement mass per pack and vehicle lifetime")
+            else:
+                replacement_masses_per_pack.append(mass * modules_per_pack)
+                print(f"module component {component} is replaceable -> adding {mass * modules_per_pack} kg to replacement mass per pack and vehicle lifetime")
         # Case 2: component is less prone to defects than worst permanently-fixed component -> component is replaced before damage by other defect and no additional replacement occurs
         elif module_component_mtbfs[index] > module_replacer_mtbf:
             replacement_masses_per_pack.append(0)
             print(f"module component {component} is replaced before damage by other defect -> adding 0 to replacement mass per pack and vehicle lifetime")
         # Case 3: component not replaceable but damaged most often; module replaceable -> weight of module is replaced
         elif replaceability_module[index] == 0 and module_component_mtbfs[index] <= module_replacer_mtbf and replaceability_pack[0] == 1:
-            replacement_masses_per_pack.append(module_mass)
-            print(f"module component {component} is NOT replaceable but most prone to defect -> adding {module_mass} to replacement mass per pack and vehicle lifetime")
-        # Case 4: component and module not replaceable; component type damaged most often -> weight of pack is replaced
+            replacement_masses_per_pack.append(module_mass * modules_per_pack)
+            print(f"module component {component} is NOT replaceable but most prone to defect -> adding {module_mass} * {modules_per_pack} kg to replacement mass per pack and vehicle lifetime")
+        # Case 4: component and module not replaceable; component type damaged most often -> weight of pack is replaced and pack_replacer_mtbf is set
         elif replaceability_module[index] == 0 and module_component_mtbfs[index] <= module_replacer_mtbf and replaceability_pack[0] == 0:
             replacement_masses_per_pack.append(pack_mass)
-            print(f"module component {component} (most prone to defect) and module are NOT replaceable -> adding {pack_mass} to replacement mass per pack and vehicle lifetime")
+            pack_replacer_mtbf = module_component_mtbfs[index]/modules_per_pack # set the pack replacer mtbf to the module component mtbf divided by the number of modules per pack
+            print(f"module component {component} (most prone to defect) and modules are NOT replaceable -> adding {pack_mass} kg to replacement mass per pack and vehicle lifetime")
+            print(f"...and pack_replacer_mtbf set to {pack_replacer_mtbf}")
         else:
             raise Exception(f"Battery module component replacement weights could not be calculated! Error occured for component: {component} at index: {index}")
     
-    # 4) Calculate Mean Time Between Failures (MTBF; in hours), replacement weights for each pack component
+    # 4) Calculate Mean Time Between Failures (MTBF; in hours) for each pack component
     component_index = 0
     for index, component in enumerate(pack_components):
         
@@ -390,36 +418,49 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
         pack_component_mtbfs.append(pack_component_mtbf)
         # module_component_reliabilities.append(component_reliability)
         
-        # Calculate replaced mass per pack and vehicle lifetime (module level components)
-        # a) Set correct component weight
-        if replaceability_pack[component_index] == 1:
-            mass = get_data_point(component, "mass") + 0.02
+    # 5) Identify the pack component type causing to replace the whole pack most often -> will determine pack replacement timing
+    for i, mtbf in enumerate(pack_component_mtbfs):
+        if not replaceability_pack[i] and mtbf < pack_replacer_mtbf:
+            pack_replacer_mtbf = mtbf
+            print(f"Lowest MTBF of non-replaceable component (re-)set to: {pack_components[i]} with {pack_replacer_mtbf}")
+        
+    # 6) Calculate replaced mass per pack and vehicle lifetime (module level components)
+    # a) Set correct component weight
+    replacement_masses_per_pack.extend(replacement_masses_per_module) # adding the module component replacement masses to the pack replacement massess
+    for index, component in enumerate(pack_components):        
+        if replaceability_pack[index] == 1:
+            mass = get_data_point(component, "mass") * replaceable_mounting_add
         else:    
             mass = get_data_point(component, "mass")
             
         # b) Add replacement weights per pack accordingly:
-        # Case 1: component replaceable -> weight of component is replaced
-        if replaceability_pack[component_index] == 1:
+        # Case 1: component replaceable and more prone to defect than worst permanently fixed component-> weight of component is replaced
+        if replaceability_pack[index] == 1 and pack_component_mtbfs[index] <= pack_replacer_mtbf:
             replacement_masses_per_pack.append(mass)
-            print(f"pack component {component} is replaceable -> adding {mass} to replacement mass per pack and vehicle lifetime")
-        # Case 2: component not replaceable -> weight of module is replaced
-        elif replaceability_pack[component_index] == 0:
+            print(f"pack component {component} is replaceable and more prone to defect than the worst irreplaceable component -> adding {mass} kg to replacement mass per pack and vehicle lifetime")
+        # Case 2: component not most prone to defect -> component is replaced before damage by other defect and no additional replacement occurs 
+        elif pack_component_mtbfs[index] > pack_replacer_mtbf:
+            replacement_masses_per_pack.append(0)
+            print(f"pack component {component} is NOT replaceable nore most prone to defect -> adding 0 kg to replacement mass per pack and vehicle lifetime")
+        # Case 3: component irreplaceable but damaged most often; pack replaceable -> weight of pack is replaced
+        elif replaceability_pack[index] == 0 and pack_component_mtbfs[index] <= pack_replacer_mtbf:
             replacement_masses_per_pack.append(pack_mass)
-            print(f"pack component {component} is NOT replaceable -> adding {pack_mass} to replacement mass per pack and vehicle lifetime")
+            print(f"pack component {component} is irreplaceable and most prone to defect -> adding pack mass {pack_mass} kg to replacement mass per pack and vehicle lifetime")
         else:
             raise Exception(f"Battery pack component replacement weight could not be calculated! Error occured for component: {component} at index: {index}")   
         component_index += 1
     
-    # 3: Calculated the pack equivalent replacements (which is assumed to be equal to the battery equivalent replacements):
+    # 7: Calculated the pack equivalent replacements (which is assumed to be equal to the battery equivalent replacements due to no other battery system levels being considered) over the vehicle lifetime:
     interim_replacements = 0
     for mtbf in (module_component_mtbfs + pack_component_mtbfs):
         replacements_per_pack.append(powered_hours / mtbf)
-    print(f"replacements per pack: {replacements_per_pack}")
+        print(f"mtbf: {mtbf}, powered_hours: {powered_hours}, replacements per pack: {powered_hours / mtbf}")
+    # print(f"replacements per pack: {replacements_per_pack}")
     
     for mass, replacements in zip(replacement_masses_per_pack, replacements_per_pack):
         interim_replacements += mass * replacements
         print(f"mass: {mass}, replacements: {float(replacements)}")
-    battery_replacements = interim_replacements / pack_mass * get_data_point("battery_scope", "number_of_packs")
+    battery_replacements = interim_replacements / pack_mass
     
     print(f"battery replacements per hdv lifetime: {float(battery_replacements)}")        
     
@@ -427,7 +468,7 @@ def objective_value_retention(initial_battery_replacements: int, cells_per_modul
 
 
 # Second objective: Maximize Battery Efficiency (translated into gravimetric energy density)
-def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: int, replaceability_module: dict, replaceability_pack: dict, cells_per_module: float, cells_per_pack: int, modules_per_pack: int, modules_in_parallel: int, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float):
+def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: int, replaceability_module: dict, replaceability_pack: dict, cells_per_module: float, cells_per_pack: int, modules_per_pack: int, modules_in_parallel: int, modules_in_series: int, cells_in_parallel: int, replaceable_mounting_add: float, packing_efficiency: float):
     """
     Objective function to compute the battery cell energy density and cell mass share, 
     considering efficiency drawbacks due to the fixation methods.
@@ -440,6 +481,8 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
     cells_in_parallel (int): number of cells in paralle per pack
     cells_per_pack (int): Total number of cells.
     modules_per_pack (int): Total number of modules per pack.
+    modules_in_parallel (int): number of modules in parallel per pack
+    modules_in_series (int): number of modules in series per pack
     replaceable_mounting_add (float): additional material to install components replaceable instead of permanently fixed (e.g., 1.03; representing 1 3% mass penalty )
     packing_efficiency (float): volumentric packing efficiency (e.g., 0,97, meaning that 97% of volume is occupied)
     
@@ -453,6 +496,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
     module_casing_mass, module_volume, cell_mass, module_mass = calculate_module(
         module_components=module_components,
         modules_in_parallel=modules_in_parallel,
+        modules_in_series=modules_in_series,
         module_design=module_design,
         cell_to_cell_clearance=cell_to_cell_clearance,
         cells_per_module=cells_per_module,
@@ -463,7 +507,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
         )
     
     cooling_system_mass = get_data_point("pack", "cooling_system_mass")
-    print(f"cooling system mass: {cooling_system_mass}")
+    # print(f"cooling system mass: {cooling_system_mass}")
     cooling_system_volume = cooling_system_mass / 2.7 # assuming cooling system is made of aluminium (with a density of 2.7 g/ccm)
         
     pack_mass, pack_volume = calculate_pack(
@@ -473,6 +517,7 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
         module_mass=module_mass,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=modules_in_parallel,
+        modules_in_series=modules_in_series,
         cells_in_parallel=cells_in_parallel,
         replaceable_mounting_add=replaceable_mounting_add,
         packing_efficiency=packing_efficiency,
@@ -486,11 +531,12 @@ def objective_efficiency_increase(module_design: int, cell_to_cell_clearance: in
     adjusted_cell_mass_share = (cell_mass * cells_per_pack) / (pack_mass)
     if adjusted_cell_mass_share < 0.5 or adjusted_cell_mass_share > 0.9:
         adjusted_cell_mass_share = initial_cell_mass_share
-        print(f"Adjusted cell_mass_share was infeasible, corrected to {adjusted_cell_mass_share}")
+        # print(f"Adjusted cell_mass_share was infeasible, corrected to {adjusted_cell_mass_share}")
     else:
-        print(f"Adjusted cell_mass_share = {adjusted_cell_mass_share} [-] = {cell_mass} * {cells_per_pack} [kg] total cells mass per pack / {pack_mass} [kg] pack mass")
-        print(f"Original cell_mass_share of {initial_cell_mass_share} adjusted to {adjusted_cell_mass_share}")
-    print(f"Total cells mass = {cells_per_pack_mass} [kg] = cell per pack ({cells_per_pack}) [#] * cell mass ({cell_mass}) [kg]")
+        pass
+        # print(f"Adjusted cell_mass_share = {adjusted_cell_mass_share} [-] = {cell_mass} * {cells_per_pack} [kg] total cells mass per pack / {pack_mass} [kg] pack mass")
+        # print(f"Original cell_mass_share of {initial_cell_mass_share} adjusted to {adjusted_cell_mass_share}")
+    # print(f"Total cells mass = {cells_per_pack_mass} [kg] = cell per pack ({cells_per_pack}) [#] * cell mass ({cell_mass}) [kg]")
     
     battery_efficiencies["cell mass share"] = float(adjusted_cell_mass_share) # [%]
     battery_efficiencies["cells per pack mass"] = int(cells_per_pack_mass) # [kg]

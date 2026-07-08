@@ -85,6 +85,7 @@ def _load_debug_config():
 module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb", "module_bms", "module_signal_connector"]
 pack_components = ["module", "pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 best_individual = None
+failure_propag_prob = 0.0
 
 
 file_path = "data/Battery_Design_Parameters.xlsx"
@@ -231,12 +232,14 @@ if _cfg:
         cells_in_parallel=cells_in_parallel_system,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=mip,
+        modules_in_series=mis,
         replaceability_module=rm,
         replaceability_pack=rp,
         replaceable_mounting_add=get_data_point("battery_scope", "replaceable_mounting_add"),
         packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
         number_of_packs=get_data_point("battery_scope", "number_of_packs"),
-        energy_storage=energy_storage
+        energy_storage=energy_storage,
+        failure_propag_prob=failure_propag_prob
     )
     _write_debug_csvs(args_row, lca_model, impact_details)
     print("Single debug configuration evaluated via optimization. Files written:")
@@ -294,12 +297,14 @@ def wrapped_objective_function(individual):
         cells_in_parallel=cells_in_parallel_system,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=modules_in_parallel,
+        modules_in_series=modules_in_series,
         replaceability_module=replaceability_module,
         replaceability_pack=replaceability_pack,
         replaceable_mounting_add=get_data_point("battery_scope", "replaceable_mounting_add"),
         packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
         number_of_packs=get_data_point("battery_scope", "number_of_packs"),
-        energy_storage=energy_storage
+        energy_storage=energy_storage,
+        failure_propag_prob=failure_propag_prob
     )
 
     # Debug: warn if module bits are nonzero for foam-filled designs
@@ -320,15 +325,16 @@ toolbox = base.Toolbox()
 # register individuals of the initial population
 toolbox.register("attr_int_series", lambda: random.randint(1, MAX_SERIES))
 toolbox.register("attr_int_parallel", lambda: random.randint(1, MAX_PARALLEL))
-toolbox.register("attr_module_component", lambda: 0) # always 0 for module components with a foam filled module design
-# toolbox.register("attr_module_component", random.randint, 0, 1)
+# toolbox.register("attr_module_component", lambda: 0) # always 0 for module components with a foam filled module design
+toolbox.register("attr_module_component", random.randint, 0, 1)
 toolbox.register("attr_pack_component", random.randint, 0, 1)
 
 def create_mixed_individual():
     modules_in_series = random.randint(1, MAX_SERIES)
     modules_in_parallel = random.randint(1, MAX_PARALLEL)
-    module_components = [0 for _ in range(6)]
-    # module_components = [random.randint(0, 1) for _ in range(6)]
+    # module_components = [1 for _ in range(6)]
+    # pack_components = [0 for _ in range(10)]
+    module_components = [random.randint(0, 1) for _ in range(6)]
     pack_components = [random.randint(0, 1) for _ in range(10)]
     return creator.Individual([modules_in_series, modules_in_parallel] + module_components + pack_components)
 
@@ -339,8 +345,8 @@ toolbox.register("evaluate", wrapped_objective_function)
 toolbox.register("mate", tools.cxTwoPoint)
 
 # --- Exploration tunables ---
-INT_MUT_PROB_SERIES = 0.35   # prob to mutate "Modules in Series"
-INT_MUT_PROB_PARALLEL = 0.35 # prob to mutate "Modules in Parallel"
+INT_MUT_PROB_SERIES = 0.35   # prob to mutate "Modules in Series"; originally 0.35
+INT_MUT_PROB_PARALLEL = 0.35 # prob to mutate "Modules in Parallel"; originally 0.35
 BOOL_MUT_PROB = 0.05         # prob to flip a boolean gene
 
 def mutate_mixed(ind):
@@ -376,8 +382,8 @@ toolbox.register("select", tools.selNSGA2)
 
 # ----- 4. GA Parameters ------------------------------------------------------
 CXPB, MUTPB = 0.8, 0.1
-NGEN = 10 # 150
-POP_SIZE = 10 # 50
+NGEN = 150 # 150
+POP_SIZE = 50 # 50
 ELITE_SIZE = max(1, round(POP_SIZE / 50))  # At least 1 elite
 
 def generate_balanced_population(pop_size):

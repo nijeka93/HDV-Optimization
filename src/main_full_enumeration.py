@@ -252,12 +252,14 @@ def evaluate(task):
         cells_in_parallel=cells_in_parallel_system,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=mip,
+        modules_in_series=mis,
         replaceability_module=rm,
         replaceability_pack=rp,
         replaceable_mounting_add=get_data_point("battery_scope", "replaceable_mounting_add"),
         packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
         number_of_packs=get_data_point("battery_scope", "number_of_packs"),
         energy_storage=energy_storage,
+        failure_propag_prob=0.5
     )
 
     if num_objectives == 1:
@@ -386,12 +388,14 @@ if __name__ == '__main__':
             cells_in_parallel=cells_in_parallel_system,
             modules_per_pack=modules_per_pack,
             modules_in_parallel=mip,
+            modules_in_series=mis,
             replaceability_module=rm,
             replaceability_pack=rp,
             replaceable_mounting_add=get_data_point("battery_scope", "replaceable_mounting_add"),
             packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
             number_of_packs=get_data_point("battery_scope", "number_of_packs"),
             energy_storage=energy_storage,
+            failure_propag_prob=0.5
         )
 
         _write_debug_csvs(args_row, lca_model, impact_details)

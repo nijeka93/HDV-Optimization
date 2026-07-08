@@ -60,8 +60,10 @@ def objective_function(
     cells_in_parallel: int,
     modules_in_parallel: int,
     modules_per_pack: int,
+    modules_in_series: int,
     replaceable_mounting_add: float,
     packing_efficiency: float,
+    failure_propag_prob,
     energy_storage: dict):
 
     _debug_init_once()
@@ -111,6 +113,7 @@ def objective_function(
         cells_per_pack=cells_per_pack,
         modules_per_pack=modules_per_pack,
         modules_in_parallel=modules_in_parallel,
+        modules_in_series=modules_in_series,
         replaceable_mounting_add=replaceable_mounting_add,
         packing_efficiency=packing_efficiency
     )
@@ -150,13 +153,15 @@ def objective_function(
         modules_in_parallel=modules_in_parallel,
         cells_per_module=cells_per_module,
         cells_in_parallel=cells_in_parallel,
+        modules_in_series=modules_in_series,
         modules_per_pack=modules_per_pack,
         replaceability_module=replaceability_module,
         replaceability_pack=replaceability_pack,
         module_mass=battery_efficiencies["module mass"],
         pack_mass=battery_efficiencies["pack mass"],
         powered_hours=get_data_point("vehicle_scope", "powered_hours"),
-        replaceable_mounting_add=replaceable_mounting_add
+        replaceable_mounting_add=replaceable_mounting_add,
+        failure_propag_prob=failure_propag_prob
         )
        
     # Run LCA
@@ -227,7 +232,6 @@ def objective_function(
     print(f"LCA parameter: 'battery_bop_mass' = ({lca_system_model['battery_bop_mass']})")
     print(f"LCA parameter: 'battery_lifetime_replacements' = ({lca_system_model['battery_lifetime_replacements']})")
     print(f"LCA parameter: 'battery_cell_mass_share' = ({lca_system_model['battery_cell_mass_share']})")
-    print(f"LCA parameter: 'battery_cell_mass_share_nmc' = ({lca_system_model['battery_cell_mass_share_nmc']})")    
     print(f"LCA parameter: 'TtW_energy' = ({lca_system_model['TtW_energy']})")
     print(f"LCA parameter: 'TtW_efficiency' = ({lca_system_model['TtW_efficiency']})")
     print(f"LCA parameter: 'electricity_consumption' = ({lca_system_model['electricity_consumption']})")
@@ -245,7 +249,7 @@ def objective_function(
     ic = InventoryTruck(tm, functional_unit="tkm")
     res = ic.calculate_impacts()
     
-    print(f"available impact categories: {ic.impact_categories}")
+    # print(f"available impact categories: {ic.impact_categories}")
     
     selected_res = res.sel(impact_category=impact_categories)
     
@@ -353,20 +357,20 @@ def objective_function(
         normalized_erd_impact = energy_resources_depletion_impact / impact_thresholds["energy resources depletion: non-renewable"] * penalty_factor
         normalized_mr_impact = material_resources_impact / impact_thresholds["material resources: metals/minerals"] * penalty_factor
 
-        print(f"Normalized Climate Change Impact: {normalized_cc_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Ozone Depletion Impact: {normalized_od_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Marine Eutrophication Impact: {normalized_meu_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Freshwater Eutrophication Impact: {normalized_feu_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Terrestrial Acidification Impact: {normalized_tac_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Land Use Impact: {normalized_lu_impact}; (penaliy = {penalty_factor})")
-        print(f"Normalized Water Use Impact: {normalized_wu_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Photochemical Ozone Impact: {normalized_pof_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Carcinogenic Human Toxicity Impact: {normalized_cht_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Non-Carcinogenic Human Toxicity Impact: {normalized_nht_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Freshwater Ecotoxicity Impact: {normalized_fet_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Ionising Radiation Impact: {normalized_ir_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Energy Resource Depletion Impact: {normalized_erd_impact}; (penalty = {penalty_factor})")
-        print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Climate Change Impact: {normalized_cc_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Ozone Depletion Impact: {normalized_od_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Marine Eutrophication Impact: {normalized_meu_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Freshwater Eutrophication Impact: {normalized_feu_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Terrestrial Acidification Impact: {normalized_tac_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Land Use Impact: {normalized_lu_impact}; (penaliy = {penalty_factor})")
+        # print(f"Normalized Water Use Impact: {normalized_wu_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Photochemical Ozone Impact: {normalized_pof_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Carcinogenic Human Toxicity Impact: {normalized_cht_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Non-Carcinogenic Human Toxicity Impact: {normalized_nht_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Freshwater Ecotoxicity Impact: {normalized_fet_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Ionising Radiation Impact: {normalized_ir_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Energy Resource Depletion Impact: {normalized_erd_impact}; (penalty = {penalty_factor})")
+        # print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penalty = {penalty_factor})")
         
         impact_details = [
             ("Climate Change Impact", climate_change_impact, impact_results_df.loc["climate change"].tolist()),
