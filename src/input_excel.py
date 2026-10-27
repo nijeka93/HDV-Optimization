@@ -374,15 +374,16 @@ def load_parameters_from_excel(file_path):
         "ozone depletion": parsed_parameters.get("AT: ozone depletion"),
         "eutrophication: marine": parsed_parameters.get("AT: eutrophication: marine"),
         "eutrophication: freshwater": parsed_parameters.get("AT: eutrophication: freshwater"),
-        "acidification: terrestrial": parsed_parameters.get("AT: acidification: terrestrial"),
-        "land use": parsed_parameters.get("AT: land use"),
+        "eutrophication: terrestrial": parsed_parameters.get("AT: eutrophication: terrestrial"),
+        "acidification": parsed_parameters.get("AT: acidification"),
         "water use": parsed_parameters.get("AT: water use"),
+        "particulate matter formation": parsed_parameters.get("AT: particulate matter formation"),
         "photochemical oxidant formation: human health": parsed_parameters.get("AT: photochemical oxidant formation: human health"),
         "human toxicity: carcinogenic": parsed_parameters.get("AT: human toxicity: carcinogenic"),
         "human toxicity: non-carcinogenic": parsed_parameters.get("AT: human toxicity: non-carcinogenic"),
         "ecotoxicity: freshwater": parsed_parameters.get("AT: ecotoxicity: freshwater"),
-        "ionising radiation": parsed_parameters.get("AT: ionising radiation"),
-        "energy resources depletion: non-renewable": parsed_parameters.get("AT: energy resources depletion: non-renewable"),
+        "ionising radiation: human health": parsed_parameters.get("AT: ionising radiation: human health"),
+        "energy resources: non-renewable": parsed_parameters.get("AT: energy resources: non-renewable"),
         "material resources: metals/minerals": parsed_parameters.get("AT: material resources: metals/minerals"),
     }
     weighting_factors = {
@@ -390,17 +391,28 @@ def load_parameters_from_excel(file_path):
         "ozone depletion": parsed_parameters.get("WF: ozone depletion"),
         "eutrophication: marine": parsed_parameters.get("WF: eutrophication: marine"),
         "eutrophication: freshwater": parsed_parameters.get("WF: eutrophication: freshwater"),
-        "acidification: terrestrial": parsed_parameters.get("WF: acidification: terrestrial"),
-        "land use": parsed_parameters.get("WF: land use"),
+        "eutrophication: terrestrial": parsed_parameters.get("WF: eutrophication: terrestrial"),
+        "acidification": parsed_parameters.get("WF: acidification"),
         "water use": parsed_parameters.get("WF: water use"),
+        "particulate matter formation": parsed_parameters.get("WF: particulate matter formation"),
         "photochemical oxidant formation: human health": parsed_parameters.get("WF: photochemical oxidant formation: human health"),
         "human toxicity: carcinogenic": parsed_parameters.get("WF: human toxicity: carcinogenic"),
         "human toxicity: non-carcinogenic": parsed_parameters.get("WF: human toxicity: non-carcinogenic"),
         "ecotoxicity: freshwater": parsed_parameters.get("WF: ecotoxicity: freshwater"),
-        "ionising radiation": parsed_parameters.get("WF: ionising radiation"),
-        "energy resources depletion: non-renewable": parsed_parameters.get("WF: energy resources depletion: non-renewable"),
+        "ionising radiation: human health": parsed_parameters.get("WF: ionising radiation: human health"),
+        "energy resources: non-renewable": parsed_parameters.get("WF: energy resources: non-renewable"),
         "material resources: metals/minerals": parsed_parameters.get("WF: material resources: metals/minerals"),
     }
+    # Fail early if the Excel keys ("AT: <name>" / "WF: <name>") do not match the
+    # carculator_truck EF 3.1 category names used in optimization.py
+    missing = [f"AT: {k}" for k, v in impact_thresholds.items() if v is None] + \
+              [f"WF: {k}" for k, v in weighting_factors.items() if v is None]
+    if missing:
+        raise ValueError(
+            f"Missing impact thresholds / weighting factors in '{file_path}' (sheet 'Input Optimization'): "
+            f"{missing}. Check the category names in 'Absolute Thresholds'!B and that the AT/WF blocks cover all rows."
+        )
+
     if target_function != "Total Environmental Impact (distance-to-target)":
         num_objectives = 1
     else:

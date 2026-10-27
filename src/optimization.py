@@ -238,15 +238,21 @@ def objective_function(
     print(f"LCA parameter: 'battery cycle life' = ({lca_system_model['battery_cycle_life']})")
 
     # 7) Define impact categories and processes
-    impact_categories = ["climate change", "ozone depletion", "eutrophication: marine", "eutrophication: freshwater", 
-                         "acidification: terrestrial", "land use", "water use", "photochemical oxidant formation: human health", 
+    impact_categories = ["climate change", "ozone depletion", "eutrophication: marine", "eutrophication: freshwater", "eutrophication: terrestrial", 
+                         "acidification", "water use", "particulate matter formation","photochemical oxidant formation: human health", 
                          "human toxicity: carcinogenic", "human toxicity: non-carcinogenic", "ecotoxicity: freshwater", 
-                         "ionising radiation", "energy resources depletion: non-renewable", "material resources: metals/minerals"]
+                         "ionising radiation: human health", "energy resources: non-renewable", "material resources: metals/minerals"]
     impact_aspects = ["glider", "powertrain", "energy storage", "energy chain",
                         "maintenance", "EOL", "road", "direct - non-exhaust", "direct - exhaust"]
 
+    # The order of the returned objective tuple must match the order of the thresholds/weights
+    # (used for the weighted TEI in main_optimization.py)
+    if list(impact_thresholds.keys()) != impact_categories:
+        raise ValueError(f"Order/naming mismatch between impact_thresholds {list(impact_thresholds.keys())} "
+                         f"and impact_categories {impact_categories}")
+
     # 8) Run LCA calculations to compute environmental impacts and structure results
-    ic = InventoryTruck(tm, functional_unit="tkm")
+    ic = InventoryTruck(tm, method="ef", functional_unit="tkm")
     res = ic.calculate_impacts()
     
     # print(f"available impact categories: {ic.impact_categories}")
@@ -268,30 +274,32 @@ def objective_function(
         ozone_depletion_impact = impact_results_df.loc["ozone depletion"]["energy storage"] + impact_results_df.loc["ozone depletion"]["energy chain"]
         marine_eutrophication_impact = impact_results_df.loc["eutrophication: marine"]["energy storage"] + impact_results_df.loc["eutrophication: marine"]["energy chain"]
         freshwater_eutrophication_impact = impact_results_df.loc["eutrophication: freshwater"]["energy storage"] + impact_results_df.loc["eutrophication: freshwater"]["energy chain"]
-        terrestrial_acidification_impact = impact_results_df.loc["acidification: terrestrial"]["energy storage"] + impact_results_df.loc["acidification: terrestrial"]["energy chain"]
-        land_use_impact = impact_results_df.loc["land use"]["energy storage"] + impact_results_df.loc["land use"]["energy chain"]
+        terrestrial_eutrophication_impact = impact_results_df.loc["eutrophication: terrestrial"]["energy storage"] + impact_results_df.loc["eutrophication: terrestrial"]["energy chain"]
+        acidification_impact = impact_results_df.loc["acidification"]["energy storage"] + impact_results_df.loc["acidification"]["energy chain"]
         water_use_impact = impact_results_df.loc["water use"]["energy storage"] + impact_results_df.loc["water use"]["energy chain"]
+        particulate_matter_formation_impact = impact_results_df.loc["particulate matter formation"]["energy storage"] + impact_results_df.loc["particulate matter formation"]["energy chain"]
         photochemical_ozone_formation_impact = impact_results_df.loc["photochemical oxidant formation: human health"]["energy storage"] + impact_results_df.loc["photochemical oxidant formation: human health"]["energy chain"]
         carcinogenic_human_toxicity_impact = impact_results_df.loc["human toxicity: carcinogenic"]["energy storage"] + impact_results_df.loc["human toxicity: carcinogenic"]["energy chain"]
         non_carcinogenic_human_toxicity_impact = impact_results_df.loc["human toxicity: non-carcinogenic"]["energy storage"] + impact_results_df.loc["human toxicity: non-carcinogenic"]["energy chain"]
         freshwater_ecotoxicity_impact = impact_results_df.loc["ecotoxicity: freshwater"]["energy storage"] + impact_results_df.loc["ecotoxicity: freshwater"]["energy chain"]
-        ionising_radiation_impact = impact_results_df.loc["ionising radiation"]["energy storage"] + impact_results_df.loc["ionising radiation"]["energy chain"]
-        energy_resources_depletion_impact = impact_results_df.loc["energy resources depletion: non-renewable"]["energy storage"] + impact_results_df.loc["energy resources depletion: non-renewable"]["energy chain"]
+        ionising_radiation_impact = impact_results_df.loc["ionising radiation: human health"]["energy storage"] + impact_results_df.loc["ionising radiation: human health"]["energy chain"]
+        energy_resources_impact = impact_results_df.loc["energy resources: non-renewable"]["energy storage"] + impact_results_df.loc["energy resources: non-renewable"]["energy chain"]
         material_resources_impact = impact_results_df.loc["material resources: metals/minerals"]["energy storage"] + impact_results_df.loc["material resources: metals/minerals"]["energy chain"]
     else: # --> scope is the entire vehicle: summing the results across all aspects for each impact category
         climate_change_impact = impact_results_df.loc["climate change"].sum()
         ozone_depletion_impact = impact_results_df.loc["ozone depletion"].sum()
         marine_eutrophication_impact = impact_results_df.loc["eutrophication: marine"].sum()
         freshwater_eutrophication_impact = impact_results_df.loc["eutrophication: freshwater"].sum()
-        terrestrial_acidification_impact = impact_results_df.loc["acidification: terrestrial"].sum()
-        land_use_impact = impact_results_df.loc["land use"].sum()
+        terrestrial_eutrophication_impact = impact_results_df.loc["eutrophication: terrestrial"].sum()
+        acidification_impact = impact_results_df.loc["acidification"].sum()
         water_use_impact = impact_results_df.loc["water use"].sum()
+        particulate_matter_formation_impact = impact_results_df.loc["particulate matter formation"].sum()
         photochemical_ozone_formation_impact = impact_results_df.loc["photochemical oxidant formation: human health"].sum()
         carcinogenic_human_toxicity_impact = impact_results_df.loc["human toxicity: carcinogenic"].sum()
         non_carcinogenic_human_toxicity_impact = impact_results_df.loc["human toxicity: non-carcinogenic"].sum()
         freshwater_ecotoxicity_impact = impact_results_df.loc["ecotoxicity: freshwater"].sum()
-        ionising_radiation_impact = impact_results_df.loc["ionising radiation"].sum()
-        energy_resources_depletion_impact = impact_results_df.loc["energy resources depletion: non-renewable"].sum()
+        ionising_radiation_impact = impact_results_df.loc["ionising radiation: human health"].sum()
+        energy_resources_impact = impact_results_df.loc["energy resources: non-renewable"].sum()
         material_resources_impact = impact_results_df.loc["material resources: metals/minerals"].sum()
     
     # Debug print the results
@@ -299,15 +307,16 @@ def objective_function(
     print(f"Ozone Depletion Impact: {ozone_depletion_impact}")
     print(f"Marine Eutrophication Impact: {marine_eutrophication_impact}")
     print(f"Freshwater Eutrophication Impact: {freshwater_eutrophication_impact}")
-    print(f"Terrestrial Acidification Impact: {terrestrial_acidification_impact}")
-    print(f"Land Use Impact: {land_use_impact}")
+    print(f"Terrestrial Eutrophication Impact: {terrestrial_eutrophication_impact}")
+    print(f"Acidification Impact: {acidification_impact}")
     print(f"Water Use Impact: {water_use_impact}")
+    print(f"Particulate Matter Formation Impact: {particulate_matter_formation_impact}")
     print(f"Photochemical Ozone Formation Impact: {photochemical_ozone_formation_impact}")
     print(f"Carcinogenic Human Toxicity Impact: {carcinogenic_human_toxicity_impact}")
     print(f"Non-Carcinogenic Human Toxicity Impact: {non_carcinogenic_human_toxicity_impact}")
     print(f"Freshwater Ecotoxicity Impact: {freshwater_ecotoxicity_impact}")
     print(f"Ionising Radiation Impact: {ionising_radiation_impact}")
-    print(f"Energy Resources Depletino Impact: {energy_resources_depletion_impact}")
+    print(f"Energy Resources Impact: {energy_resources_impact}")
     print(f"Material Resources Impact: {material_resources_impact}")
     
     # c) Prepare penalty, if configuration is infeasible (foam filling but replaceable module components)
@@ -322,15 +331,16 @@ def objective_function(
         "ozone depletion": ("Ozone Depletion Impact", ozone_depletion_impact, "ozone depletion"),
         "eutrophication: marine": ("Marine Eutrophication Impact", marine_eutrophication_impact, "eutrophication: marine"),
         "eutrophication: freshwater": ("Freshwater Eutrophication Impact", freshwater_eutrophication_impact, "eutrophication: freshwater"),
-        "acidification: terrestrial": ("Terrestrial Acidification Impact", terrestrial_acidification_impact, "acidification: terrestrial"),
-        "land use": ("Land Use Impact", land_use_impact, "land use"),
+        "eutrophication: terrestrial": ("Terrestrial Eutrophication Impact", terrestrial_eutrophication_impact, "eutrophication: terrestrial"),
+        "acidification": ("Acidification Impact", acidification_impact, "acidification"),
         "water use": ("Water Use Impact", water_use_impact, "water use"),
+        "particulate matter formation": ("Particulate Matter Formation Impact", particulate_matter_formation_impact, "particulate matter formation"),
         "photochemical oxidant formation: human health": ("Photochemical Ozone Formation Impact", photochemical_ozone_formation_impact, "photochemical oxidant formation: human health"),
         "human toxicity: carcinogenic": ("Carcinogenic Human Toxicity Impact", carcinogenic_human_toxicity_impact, "human toxicity: carcinogenic"),
         "human toxicity: non-carcinogenic": ("Non-Carcinogenic Human Toxicity Impact", non_carcinogenic_human_toxicity_impact, "human toxicity: non-carcinogenic"),
         "ecotoxicity: freshwater": ("Freshwater Ecotoxicity Impact", freshwater_ecotoxicity_impact, "ecotoxicity: freshwater"),
-        "ionising radiation": ("Ionising Radiation Impact", ionising_radiation_impact, "ionising radiation"),
-        "energy resources depletion: non-renewable": ("Energy Resources Depletion Impact", energy_resources_depletion_impact, "energy resources depletion: non-renewable"),
+        "ionising radiation: human health": ("Ionising Radiation Impact", ionising_radiation_impact, "ionising radiation: human health"),
+        "energy resources: non-renewable": ("Energy Resources Impact", energy_resources_impact, "energy resources: non-renewable"),
         "material resources: metals/minerals": ("Material Resources Impact", material_resources_impact, "material resources: metals/minerals"),
     }
 
@@ -346,48 +356,35 @@ def objective_function(
         normalized_od_impact = ozone_depletion_impact / impact_thresholds["ozone depletion"] * penalty_factor
         normalized_meu_impact = marine_eutrophication_impact / impact_thresholds["eutrophication: marine"] * penalty_factor
         normalized_feu_impact = freshwater_eutrophication_impact / impact_thresholds["eutrophication: freshwater"] * penalty_factor
-        normalized_tac_impact = terrestrial_acidification_impact / impact_thresholds["acidification: terrestrial"] * penalty_factor
-        normalized_lu_impact = land_use_impact / impact_thresholds["land use"] * penalty_factor
+        normalized_teu_impact = terrestrial_eutrophication_impact / impact_thresholds["eutrophication: terrestrial"] * penalty_factor
+        normalized_tac_impact = acidification_impact / impact_thresholds["acidification"] * penalty_factor
         normalized_wu_impact = water_use_impact / impact_thresholds["water use"] * penalty_factor
+        normalized_pm_impact = particulate_matter_formation_impact / impact_thresholds["particulate matter formation"] * penalty_factor
         normalized_pof_impact = photochemical_ozone_formation_impact / impact_thresholds["photochemical oxidant formation: human health"] * penalty_factor
         normalized_cht_impact = carcinogenic_human_toxicity_impact / impact_thresholds["human toxicity: carcinogenic"] * penalty_factor
         normalized_nht_impact = non_carcinogenic_human_toxicity_impact / impact_thresholds["human toxicity: non-carcinogenic"] * penalty_factor
         normalized_fet_impact = freshwater_ecotoxicity_impact / impact_thresholds["ecotoxicity: freshwater"] * penalty_factor
-        normalized_ir_impact = ionising_radiation_impact / impact_thresholds["ionising radiation"] * penalty_factor
-        normalized_erd_impact = energy_resources_depletion_impact / impact_thresholds["energy resources depletion: non-renewable"] * penalty_factor
+        normalized_ir_impact = ionising_radiation_impact / impact_thresholds["ionising radiation: human health"] * penalty_factor
+        normalized_erd_impact = energy_resources_impact / impact_thresholds["energy resources: non-renewable"] * penalty_factor
         normalized_mr_impact = material_resources_impact / impact_thresholds["material resources: metals/minerals"] * penalty_factor
-
-        # print(f"Normalized Climate Change Impact: {normalized_cc_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Ozone Depletion Impact: {normalized_od_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Marine Eutrophication Impact: {normalized_meu_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Freshwater Eutrophication Impact: {normalized_feu_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Terrestrial Acidification Impact: {normalized_tac_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Land Use Impact: {normalized_lu_impact}; (penaliy = {penalty_factor})")
-        # print(f"Normalized Water Use Impact: {normalized_wu_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Photochemical Ozone Impact: {normalized_pof_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Carcinogenic Human Toxicity Impact: {normalized_cht_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Non-Carcinogenic Human Toxicity Impact: {normalized_nht_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Freshwater Ecotoxicity Impact: {normalized_fet_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Ionising Radiation Impact: {normalized_ir_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Energy Resource Depletion Impact: {normalized_erd_impact}; (penalty = {penalty_factor})")
-        # print(f"Normalized Material Resources Impact: {normalized_mr_impact}; (penalty = {penalty_factor})")
         
         impact_details = [
             ("Climate Change Impact", climate_change_impact, impact_results_df.loc["climate change"].tolist()),
             ("Ozone Depletion Impact", ozone_depletion_impact, impact_results_df.loc["ozone depletion"].tolist()),
             ("Marine Eutrophication Impact", marine_eutrophication_impact, impact_results_df.loc["eutrophication: marine"].tolist()),
             ("Freshwater Eutrophication Impact", freshwater_eutrophication_impact, impact_results_df.loc["eutrophication: freshwater"].tolist()),
-            ("Terrestrial Acidification Impact", terrestrial_acidification_impact, impact_results_df.loc["acidification: terrestrial"].tolist()),
-            ("Land Use Impact", land_use_impact, impact_results_df.loc["land use"].tolist()),
+            ("Terrestrial Eutrophication Impact", terrestrial_eutrophication_impact, impact_results_df.loc["eutrophication: terrestrial"].tolist()),
+            ("Acidification Impact", acidification_impact, impact_results_df.loc["acidification"].tolist()),
             ("Water Use Impact", water_use_impact, impact_results_df.loc["water use"].tolist()),
+            ("Particulate Matter Formation Impact", particulate_matter_formation_impact, impact_results_df.loc["particulate matter formation"].tolist()),
             ("Photochemical Ozone Formation Impact", photochemical_ozone_formation_impact, impact_results_df.loc["photochemical oxidant formation: human health"].tolist()),
             ("Carcinogenic Human Toxicity Impact", carcinogenic_human_toxicity_impact, impact_results_df.loc["human toxicity: carcinogenic"].tolist()),
             ("Non-Carcinogenic Human Toxicity Impact", non_carcinogenic_human_toxicity_impact, impact_results_df.loc["human toxicity: non-carcinogenic"].tolist()),
             ("Freshwater Ecotoxicity Impact", freshwater_ecotoxicity_impact, impact_results_df.loc["ecotoxicity: freshwater"].tolist()),
-            ("Ionising Radiation Impact", ionising_radiation_impact, impact_results_df.loc["ionising radiation"].tolist()),
-            ("Energy Resources Depletion Impact", energy_resources_depletion_impact, impact_results_df.loc["energy resources depletion: non-renewable"].tolist()),
+            ("Ionising Radiation Impact", ionising_radiation_impact, impact_results_df.loc["ionising radiation: human health"].tolist()),
+            ("Energy Resources Impact", energy_resources_impact, impact_results_df.loc["energy resources: non-renewable"].tolist()),
             ("Material Resources Impact", material_resources_impact, impact_results_df.loc["material resources: metals/minerals"].tolist())
         ]
-        return ((normalized_cc_impact, normalized_od_impact, normalized_meu_impact, normalized_feu_impact, normalized_tac_impact, normalized_lu_impact, normalized_wu_impact, normalized_pof_impact, normalized_cht_impact, normalized_nht_impact, normalized_fet_impact, normalized_ir_impact, normalized_erd_impact, normalized_mr_impact), impact_details, lca_system_model)
+        return ((normalized_cc_impact, normalized_od_impact, normalized_meu_impact, normalized_feu_impact, normalized_teu_impact, normalized_tac_impact, normalized_wu_impact, normalized_pm_impact,normalized_pof_impact, normalized_cht_impact, normalized_nht_impact, normalized_fet_impact, normalized_ir_impact, normalized_erd_impact, normalized_mr_impact), impact_details, lca_system_model)
     else:
         raise ValueError(f"Target Function {target_function} unknown")    

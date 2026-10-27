@@ -117,16 +117,17 @@ target_function_map = {
     "Ozone Depletion Impact": "OD",
     "Marine Eutrophication Impact": "MEU",
     "Freshwater Eutrophication Impact": "FEU",
-    "Terrestrial Acidification Impact": "TAC",
-    "Land Use Impact": "LU",
+    "Terrestrial Eutrophication Impact": "TEU",
+    "Acidification Impact": "TAC",
     "Water Use Impact": "WU",
+    "Particulate Matter Formation Impact": "PM",
     "Photochemical Oxidant Formation Impact": "POF",
     "Carcinogenic Human Toxicity Impact": "CHT",
     "Non-Carcinogenic Human Toxicity Impact": "NHT",
     "Freshwater Ecotoxicity Impact": "FET",
     "Ionising Radiation Impact": "IR",
-    "Energy Resource Depletion Impact": "ERD",
-    "Material Resource Impact": "MR",
+    "Energy Resources Impact": "ERD",
+    "Material Resources Impact": "MR",
 }
 
 common_columns = [

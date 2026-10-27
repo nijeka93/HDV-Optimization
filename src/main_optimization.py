@@ -101,6 +101,14 @@ file_path = "data/Battery_Design_Parameters.xlsx"
     weighting_factors,
 ) = load_parameters_from_excel(file_path)
 
+# Objective weights in the same order as the objective tuple returned by objective_function
+# (order is checked in optimization.py); used for elitism only, NSGA-II selection stays Pareto-based
+OBJECTIVE_WEIGHTS = [weighting_factors[k] for k in impact_thresholds] if num_objectives > 1 else [1.0]
+
+def weighted_score(fitness_values):
+    """Scalar for elitism: TEI (Eq. 5) for multi-objective runs, the objective itself for single-objective runs."""
+    return float(sum(w * v for w, v in zip(OBJECTIVE_WEIGHTS, fitness_values)))
+
 # Cache module design for reuse
 module_design = get_data_point("battery_scope", "module_design")
 
@@ -117,16 +125,17 @@ target_function_map = {
     "Ozone Depletion Impact": "OD",
     "Marine Eutrophication Impact": "MEU",
     "Freshwater Eutrophication Impact": "FEU",
-    "Terrestrial Acidification Impact": "TAC",
-    "Land Use Impact": "LU",
+    "Terrestrial Eutrophication Impact": "TEU",
+    "Acidification Impact": "TAC",
     "Water Use Impact": "WU",
+    "Particulate Matter Formation Impact": "PM",
     "Photochemical Oxidant Formation Impact": "POF",
     "Carcinogenic Human Toxicity Impact": "CHT",
     "Non-Carcinogenic Human Toxicity Impact": "NHT",
     "Freshwater Ecotoxicity Impact": "FET",
     "Ionising Radiation Impact": "IR",
-    "Energy Resource Depletion Impact": "ERD",
-    "Material Resource Impact": "MR",
+    "Energy Resources Impact": "ERD",
+    "Material Resources Impact": "MR",
 }
 
 common_columns = [
@@ -410,6 +419,15 @@ def assign_id_if_needed(ind):
     if not hasattr(ind, 'id_'):
         ind.id_ = next(id_counter)
 
+def clone_with_record(src):
+    """Copy an evaluated individual incl. its (normalized) fitness and archive record under a new id."""
+    c = creator.Individual(src)
+    c.fitness.values = src.fitness.values
+    c.id_ = next(id_counter)
+    if hasattr(src, 'id_') and src.id_ in archive:
+        archive[c.id_] = archive[src.id_]
+    return c
+
 # ----- 6. Main Evolutionary Loop ---------------------------------------------
 for generation in range(NGEN):
     # Variation: apply crossover and mutation
@@ -438,37 +456,25 @@ for generation in range(NGEN):
         ind.fitness.values = normalized_fit
         archive[ind.id_] = (impact_details, lca_system_model)
 
-    # Update best individual across generations
+    # Update best individual across generations (lowest weighted score, Eq. 5;
+    # previously a lexicographic tuple comparison, i.e. effectively climate change first)
     for ind in offspring:
         if ind.fitness.valid:
-            if (best_individual is None) or (ind.fitness.values < best_individual.fitness.values):
-                best_individual = creator.Individual(ind)
-                best_individual.fitness.values = ind.fitness.values
+            if (best_individual is None) or (weighted_score(ind.fitness.values) < weighted_score(best_individual.fitness.values)):
+                best_individual = clone_with_record(ind)
 
     # --- Instead of separate logging for invalid individuals and elites,
     #      log the entire population of this generation.
     for ind in pop:
         assign_id_if_needed(ind)
-    top_ind = tools.selBest(offspring, ELITE_SIZE)
+    # Elites by weighted score (tools.selBest compares fitness tuples lexicographically)
+    valid_offspring = [ind for ind in offspring if ind.fitness.valid]
+    top_ind = sorted(valid_offspring, key=lambda i: weighted_score(i.fitness.values))[:ELITE_SIZE]
 
-    # Remove the id_ attribute from elites so that new IDs are generated
-    for e in top_ind:
-        if hasattr(e, 'id_'):
-            del e.id_
-
-    # Now, clone elites for strict elitism:
-    elites = [creator.Individual(e) for e in top_ind]
-    # Re-assign new IDs to these clones:
-    for e in elites:
-        assign_id_if_needed(e)
-    for e in elites:
-        if e.id_ in archive:
-            imp_det, lca_sys_model = archive[e.id_]
-            if num_objectives == 1:
-                distance_to_target = imp_det[1]
-            else:
-                distance_to_target = tuple(impact[1] for impact in imp_det)
-            e.fitness.values = distance_to_target if isinstance(distance_to_target, tuple) else (distance_to_target,)
+    # Clone elites for strict elitism, keeping their normalized fitness and archive record
+    # (previously: ids were deleted and re-assigned, so the archive lookup never matched and
+    # the dormant fallback would have assigned raw instead of normalized impacts)
+    elites = [clone_with_record(e) for e in top_ind]
 
     # Select the rest from offspring (fill up to POP_SIZE - ELITE_SIZE)
     remainder = toolbox.select(offspring, len(pop) - ELITE_SIZE)
@@ -479,13 +485,12 @@ for generation in range(NGEN):
     # Enforce one elite (global best across generations)
     elite_ids = {ind.id_ for ind in elites}
     if best_individual is not None:
-        elite = creator.Individual(best_individual)
-        assign_id_if_needed(elite)
+        elite = clone_with_record(best_individual)
         if all((not hasattr(ind, 'id_')) or (elite.id_ != ind.id_) for ind in new_pop):
             non_elite_inds = [ind for ind in new_pop if (not hasattr(ind, 'id_')) or (ind.id_ not in elite_ids)]
             if non_elite_inds:
                 to_remove = random.choice(non_elite_inds)
-                new_pop.remove(to_remove)
+                new_pop = [i for i in new_pop if i is not to_remove]  # by identity; list.remove() matches equal genes and could drop the elite
                 new_pop.append(elite)
 
         # Diversity injection: copy best and jitter integer genes to avoid getting stuck
@@ -505,7 +510,7 @@ for generation in range(NGEN):
         candidates = [ind for ind in new_pop if ind.id_ not in elite_ids]
         if candidates:
             to_remove = random.choice(candidates)
-            new_pop.remove(to_remove)
+            new_pop = [i for i in new_pop if i is not to_remove]  # by identity; list.remove() matches equal genes and could drop the elite
             new_pop.append(injected)
 
     # Ensure all individuals in the new population have IDs
