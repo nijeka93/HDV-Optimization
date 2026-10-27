@@ -96,7 +96,7 @@ CANDIDATE_PAIRS = [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)]  # <- set your shortl
 # =============================================================================
 # 1. Load Shared Parameters from Excel
 # =============================================================================
-file_path = "Battery_Design_Parameters_FE.xlsx"
+file_path = "data/Battery_Design_Parameters_FE.xlsx"
 (vehicle_scope, battery_scope, carculator_scope, energy_storage, 
  scope, target_function, num_objectives, impact_thresholds, weighting_factors) = load_parameters_from_excel(file_path)
 
