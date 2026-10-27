@@ -29,8 +29,20 @@ def load_parameters_from_excel(file_path):
 
     # Convert the dataframe into a dictionary
     parsed_parameters = parameters_df.set_index("Parameter")["Value"].dropna().to_dict()
-    
-    
+
+    # Optional scenario overrides (used by run_sensitivities.py), e.g.
+    # PARAM_OVERRIDES='{"Cell Quality": "low", "Electricity Mix Usage": "PL"}'
+    # Keys must match the parameter names in column D of 'Input Optimization'.
+    import os, json
+    overrides = json.loads(os.environ.get("PARAM_OVERRIDES", "{}") or "{}")
+    unknown = [k for k in overrides if k not in parsed_parameters]
+    if unknown:
+        raise KeyError(f"PARAM_OVERRIDES contains unknown parameter names: {unknown}")
+    for k, v in overrides.items():
+        print(f"[scenario] override '{k}': {parsed_parameters[k]!r} -> {v!r}")
+        parsed_parameters[k] = v
+
+
     powered_hours = calc_lifetime_hours(
         driving_cycle=parsed_parameters.get("Driving Cycle", ""),
         size=parsed_parameters.get("Vehicle Size", ""),
