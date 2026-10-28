@@ -1,7 +1,6 @@
 import random
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import math
 import itertools
 # --- Force-local imports to win over similarly named modules on PYTHONPATH ---
@@ -85,7 +84,11 @@ def _load_debug_config():
 module_components = ["cell", "module_voltage_sensor", "module_temperature_sensor", "module_pcb", "module_bms", "module_signal_connector"]
 pack_components = ["module", "pack_voltage_sensor", "pack_current_sensor", "pack_pcb", "pack_bms", "pack_signal_connector", "pack_power_connector", "pack_busbar", "pack_relay", "pack_fuse"]
 best_individual = None
-failure_propag_prob = 0.0
+# Scenario settings via environment variables (defaults = baseline; set by run_sensitivities.py)
+failure_propag_prob = float(os.environ.get("FAILURE_PROPAG_PROB", "0.0"))
+if os.environ.get("GA_SEED"):
+    random.seed(int(os.environ["GA_SEED"]))  # reproducible GA runs
+print(f"[scenario] failure_propag_prob = {failure_propag_prob}, GA_SEED = {os.environ.get('GA_SEED')}")
 
 
 file_path = "data/Battery_Design_Parameters.xlsx"
@@ -391,8 +394,8 @@ toolbox.register("select", tools.selNSGA2)
 
 # ----- 4. GA Parameters ------------------------------------------------------
 CXPB, MUTPB = 0.8, 0.1
-NGEN = 150 # 150
-POP_SIZE = 50 # 50
+NGEN = int(os.environ.get("GA_NGEN", 150))          # 150; override only for quick test runs
+POP_SIZE = int(os.environ.get("GA_POP_SIZE", 50))    # 50
 ELITE_SIZE = max(1, round(POP_SIZE / 50))  # At least 1 elite
 
 def generate_balanced_population(pop_size):

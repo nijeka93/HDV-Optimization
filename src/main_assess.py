@@ -1,7 +1,6 @@
 import random
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import math
 import itertools
 # --- Force-local imports to win over similarly named modules on PYTHONPATH ---
@@ -87,11 +86,11 @@ pack_components = ["module", "pack_voltage_sensor", "pack_current_sensor", "pack
 best_individual = None
 failure_propag_prob = 0.0
 modules_in_series = 1
-modules_in_parallel = 1
-module_bits = [0, 0, 0, 0, 0, 1] # optimal configuration
-pack_bits = [1, 1, 1, 1, 1, 1, 0, 1, 1, 0] # optimal configuration
-# module_bits = [1, 0, 0, 0, 0, 0] # reference configuration
-# pack_bits = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # reference configuration
+modules_in_parallel = 6
+# module_bits = [0, 0, 0, 0, 0, 1] # optimal configuration
+# pack_bits = [1, 1, 1, 1, 1, 1, 0, 1, 1, 0] # optimal configuration
+module_bits = [1, 0, 0, 0, 0, 0] # reference configuration
+pack_bits = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # reference configuration
 
 INT_MUT_PROB_SERIES = 0.   # prob to mutate "Modules in Series"
 INT_MUT_PROB_PARALLEL = 0. # prob to mutate "Modules in Parallel"

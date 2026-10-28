@@ -11,6 +11,13 @@ dependencies:
   - pandas
   - matplotlib
   - openpyxl
+  - carculator_utils
+  - numexpr
+  - prettytable
+  - pytest
+  - pyyaml
+  - setuptools
+  - xarray
   - pip:
       - deap
       - carculator-truck
