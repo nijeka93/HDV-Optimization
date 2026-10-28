@@ -260,7 +260,7 @@ def evaluate(task):
         packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
         number_of_packs=get_data_point("battery_scope", "number_of_packs"),
         energy_storage=energy_storage,
-        failure_propag_prob=0.5
+        failure_propag_prob=float(os.environ.get("FAILURE_PROPAG_PROB", "0.0"))
     )
 
     if num_objectives == 1:
@@ -396,7 +396,7 @@ if __name__ == '__main__':
             packing_efficiency=get_data_point("battery_scope", "packing_efficiency"),
             number_of_packs=get_data_point("battery_scope", "number_of_packs"),
             energy_storage=energy_storage,
-            failure_propag_prob=0.5
+            failure_propag_prob=float(os.environ.get("FAILURE_PROPAG_PROB", "0.0"))
         )
 
         _write_debug_csvs(args_row, lca_model, impact_details)

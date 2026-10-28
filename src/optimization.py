@@ -9,6 +9,40 @@ from classes import VehicleScope, Battery_Scope, Pack, Cell, StandardComponent
 
 import inspect  # add near other imports
 
+
+# --- carculator_utils fix: auxiliary energy of BEVs -------------------------------------
+# EnergyConsumptionModel.aux_energy_per_km() divides the auxiliary power by the per-second
+# electric motor efficiency. Its own docstring states that battery electric vehicles should use
+# an efficiency of one (battery losses are accounted for elsewhere). At near-zero motor loads the
+# efficiency approaches zero, which inflates the auxiliary energy erratically between designs.
+# The study scope is BEV only, so the efficiency is set to one for this calculation.
+from carculator_utils.energy_consumption import EnergyConsumptionModel as _ECM
+if not getattr(_ECM.aux_energy_per_km, "_bev_fix", False):
+    _orig_aux_energy_per_km = _ECM.aux_energy_per_km
+    def _aux_energy_per_km_bev(self, aux_power, efficiency, *args, **kwargs):
+        eff = efficiency.values if hasattr(efficiency, "values") else np.asarray(efficiency)
+        return _orig_aux_energy_per_km(self, aux_power, np.ones_like(eff), *args, **kwargs)
+    _aux_energy_per_km_bev._bev_fix = True
+    _ECM.aux_energy_per_km = _aux_energy_per_km_bev
+
+
+class TruckModelDesignBattery(TruckModel):
+    """TruckModel that keeps the designed battery inside carculator_truck's sizing loop.
+
+    carculator_truck sizes the battery from target range and energy consumption in
+    set_energy_stored_properties() and uses that battery for curb mass, driving mass and
+    TtW energy. Re-imposing the designed battery after each sizing step makes the vehicle
+    masses and the energy consumption consistent with the battery model (f1, f2).
+    """
+    def __init__(self, *args, design_battery=None, **kwargs):
+        self.design_battery = design_battery or {}
+        super().__init__(*args, **kwargs)
+
+    def set_energy_stored_properties(self):
+        super().set_energy_stored_properties()
+        for parameter, value in self.design_battery.items():
+            self.array.loc[dict(parameter=parameter)] = value
+
 # Debug directory and initializer
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEBUG_DIR = MODULE_DIR  # write debug CSVs next to this file for predictability
@@ -189,8 +223,15 @@ def objective_function(
     }
 
     # 4) Initialize TruckModel based on user inputs
-    tm = TruckModel(
+    design_battery = {
+        "battery cell mass": battery_cells_mass,
+        "energy battery mass": battery_total_mass,
+        "battery BoP mass": battery_bop_mass,
+        "electric energy stored": battery_cells_mass * get_data_point("cell", "gravimetric_energy") / 1000,  # [kWh]
+    }
+    tm = TruckModelDesignBattery(
         array,
+        design_battery=design_battery,
         cycle = vehicle_scope.driving_cycle,
         target_range = vehicle_scope.target_range,
         country = vehicle_scope.country_of_use,

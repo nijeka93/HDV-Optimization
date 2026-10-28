@@ -66,6 +66,7 @@ def run_scenario(name: str, cfg: dict, out: Path, args) -> tuple:
         "PARAM_OVERRIDES": json.dumps(cfg.get("overrides", {})),
         "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",  # one core per run
         "MPLBACKEND": "Agg",
+        "PYTHONUNBUFFERED": "1",  # write run.log live
     })
     env.update(cfg.get("env", {}))
     if args.seed is not None:
@@ -97,6 +98,11 @@ def main():
         for n, c in SCENARIOS.items():
             print(f"{n:24s} {c}")
         return
+    # Pre-flight: refuse to start with scripts that lack the scenario settings or the battery fix
+    for f, token in [("src/main_optimization.py", "GA_NGEN"), ("src/input_excel.py", "PARAM_OVERRIDES"),
+                     ("src/optimization.py", "TruckModelDesignBattery"), ("src/optimization.py", "_bev_fix")]:
+        if token not in (PROJECT / f).read_text():
+            sys.exit(f"{f} does not contain '{token}' - outdated copy? Aborting.")
     names = args.only or [n for n in SCENARIOS if n != "Baseline" or args.include_baseline]
     unknown = [n for n in names if n not in SCENARIOS]
     if unknown:
